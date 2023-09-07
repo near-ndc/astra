@@ -13,10 +13,10 @@ license = { workspace = true }
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-near-sdk = "4.0.0-pre.4"
-near-contract-standards = "4.0.0-pre.4"
-hex = "0.4.2"
+near-sdk.workspace = true
+near-contract-standards.workspace = true
+hex.workspace = true
 
 [dev-dependencies]
-near-sdk-sim = "4.0.0-pre.4"
+near-sdk-sim.workspace = true
 test-token = { path = "../test-token" }

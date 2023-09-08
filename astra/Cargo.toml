@@ -21,6 +21,7 @@ version = "1.4.0"
 
 [dev-dependencies]
 workspaces.workspace = true
+near-units.workspace = true
 test-token = { path = "../test-token" }
 astra-staking = { path = "../astra-staking" }
 astra-factory = { path = "../astra-factory" }

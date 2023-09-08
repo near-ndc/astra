@@ -76,6 +76,7 @@ dependencies = [
  "hex 0.4.3",
  "near-contract-standards",
  "near-sdk",
+ "near-units",
  "serde_with",
  "test-token",
  "workspaces",

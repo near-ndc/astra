@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use near_contract_standards::fungible_token::core_impl::ext_fungible_token;
+use near_contract_standards::fungible_token::core::ext_ft_core;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::{Base64VecU8, U128, U64};
 use near_sdk::{log, AccountId, Balance, Gas, PromiseOrValue};
@@ -262,23 +262,23 @@ impl Contract {
             Promise::new(receiver_id.clone()).transfer(amount).into()
         } else {
             if let Some(msg) = msg {
-                ext_fungible_token::ft_transfer_call(
-                    receiver_id.clone(),
-                    U128(amount),
-                    Some(memo),
-                    msg,
-                    token_id.as_ref().unwrap().clone(),
-                    ONE_YOCTO_NEAR,
-                    GAS_FOR_FT_TRANSFER,
+                ext_ft_core::ext(token_id.as_ref().unwrap().clone())
+                    .with_static_gas(GAS_FOR_FT_TRANSFER)
+                    .with_attached_deposit(ONE_YOCTO_NEAR)
+                    .ft_transfer_call(
+                        receiver_id.clone(),
+                        U128(amount),
+                        Some(memo),
+                        msg
                 )
             } else {
-                ext_fungible_token::ft_transfer(
-                    receiver_id.clone(),
-                    U128(amount),
-                    Some(memo),
-                    token_id.as_ref().unwrap().clone(),
-                    ONE_YOCTO_NEAR,
-                    GAS_FOR_FT_TRANSFER,
+                ext_ft_core::ext(token_id.as_ref().unwrap().clone())
+                    .with_static_gas(GAS_FOR_FT_TRANSFER)
+                    .with_attached_deposit(ONE_YOCTO_NEAR)
+                    .ft_transfer(
+                        receiver_id.clone(),
+                        U128(amount),
+                        Some(memo),
                 )
             }
             .into()

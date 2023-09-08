@@ -1,4 +1,4 @@
-use near_contract_standards::fungible_token::core_impl::ext_fungible_token;
+use near_contract_standards::fungible_token::core::ext_ft_core;
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::LookupMap;
@@ -31,7 +31,7 @@ pub const GAS_FOR_REGISTER: Gas = Gas(10_000_000_000_000);
 pub const GAS_FOR_UNDELEGATE: Gas = Gas(10_000_000_000_000);
 
 #[ext_contract(ext_astra)]
-pub trait Astra {
+pub trait ExtAstra {
     fn register_delegation(&mut self, account_id: AccountId);
     fn delegate(&mut self, account_id: AccountId, amount: U128);
     fn undelegate(&mut self, account_id: AccountId, amount: U128);
@@ -53,7 +53,7 @@ pub struct Contract {
 }
 
 #[ext_contract(ext_self)]
-pub trait Contract {
+pub trait ExtSelf {
     fn exchange_callback_post_withdraw(&mut self, sender_id: AccountId, amount: U128);
 }
 
@@ -90,12 +90,11 @@ impl Contract {
     pub fn delegate(&mut self, account_id: AccountId, amount: U128) -> Promise {
         let sender_id = env::predecessor_account_id();
         self.internal_delegate(sender_id, account_id.clone().into(), amount.0);
-        ext_astra::delegate(
+        ext_astra::ext(self.owner_id.clone())
+        .with_static_gas(GAS_FOR_DELEGATE)
+        .delegate(
             account_id.into(),
-            amount,
-            self.owner_id.clone(),
-            0,
-            GAS_FOR_DELEGATE,
+            amount
         )
     }
 
@@ -103,12 +102,11 @@ impl Contract {
     pub fn undelegate(&mut self, account_id: AccountId, amount: U128) -> Promise {
         let sender_id = env::predecessor_account_id();
         self.internal_undelegate(sender_id, account_id.clone().into(), amount.0);
-        ext_astra::undelegate(
+        ext_astra::ext(self.owner_id.clone())
+        .with_static_gas(GAS_FOR_UNDELEGATE)
+        .undelegate(
             account_id.into(),
-            amount,
-            self.owner_id.clone(),
-            0,
-            GAS_FOR_UNDELEGATE,
+            amount
         )
     }
 
@@ -117,21 +115,21 @@ impl Contract {
     pub fn withdraw(&mut self, amount: U128) -> Promise {
         let sender_id = env::predecessor_account_id();
         self.internal_withdraw(&sender_id, amount.0);
-        ext_fungible_token::ft_transfer(
-            sender_id.clone(),
-            amount,
-            None,
-            self.vote_token_id.clone(),
-            1,
-            GAS_FOR_FT_TRANSFER,
+        ext_ft_core::ext(self.vote_token_id.clone())
+            .with_static_gas(GAS_FOR_FT_TRANSFER)
+            .with_attached_deposit(1)
+            .ft_transfer(
+                sender_id.clone(),
+                amount,
+                None
         )
-        .then(ext_self::exchange_callback_post_withdraw(
-            sender_id,
-            amount,
-            env::current_account_id(),
-            0,
-            GAS_FOR_FT_TRANSFER,
-        ))
+        .then(ext_self::ext(env::current_account_id())
+            .with_static_gas(GAS_FOR_FT_TRANSFER)
+            .exchange_callback_post_withdraw(
+                sender_id,
+                amount
+            )
+        )
     }
 
     #[private]
@@ -178,7 +176,7 @@ mod tests {
     use near_sdk::test_utils::{accounts, VMContextBuilder};
     use near_sdk::testing_env;
 
-    use near_sdk_sim::to_yocto;
+    use near_units::parse_near;
 
     use super::*;
 
@@ -197,39 +195,39 @@ mod tests {
             .build());
         let mut contract = Contract::new(contract_owner, voting_token.clone(), U64(UNSTAKE_PERIOD));
 
-        testing_env!(context.attached_deposit(to_yocto("1")).build());
+        testing_env!(context.attached_deposit(parse_near!("1 N")).build());
         contract.storage_deposit(Some(delegate_from_user.clone()), None);
 
         testing_env!(context.predecessor_account_id(voting_token.clone()).build());
         contract.ft_on_transfer(
             delegate_from_user.clone(),
-            U128(to_yocto("100")),
+            U128(parse_near!("100")),
             "".to_string(),
         );
-        assert_eq!(contract.ft_total_supply().0, to_yocto("100"));
+        assert_eq!(contract.ft_total_supply().0, parse_near!("100 N"));
         assert_eq!(
             contract.ft_balance_of(delegate_from_user.clone()).0,
-            to_yocto("100")
+            parse_near!("100")
         );
 
         testing_env!(context
             .predecessor_account_id(delegate_from_user.clone())
             .build());
-        contract.withdraw(U128(to_yocto("50")));
-        assert_eq!(contract.ft_total_supply().0, to_yocto("50"));
+        contract.withdraw(U128(parse_near!("50 N")));
+        assert_eq!(contract.ft_total_supply().0, parse_near!("50 N"));
         assert_eq!(
             contract.ft_balance_of(delegate_from_user.clone()).0,
-            to_yocto("50")
+            parse_near!("50")
         );
 
-        testing_env!(context.attached_deposit(to_yocto("1")).build());
+        testing_env!(context.attached_deposit(parse_near!("1 N")).build());
         contract.storage_deposit(Some(delegate_to_user.clone()), None);
 
-        contract.delegate(delegate_to_user.clone(), U128(to_yocto("10")));
+        contract.delegate(delegate_to_user.clone(), U128(parse_near!("10 N")));
         let user = contract.get_user(delegate_from_user.clone());
-        assert_eq!(user.delegated_amount(), to_yocto("10"));
+        assert_eq!(user.delegated_amount(), parse_near!("10 N"));
 
-        contract.undelegate(delegate_to_user, U128(to_yocto("10")));
+        contract.undelegate(delegate_to_user, U128(parse_near!("10 N")));
         let user = contract.get_user(delegate_from_user);
         assert_eq!(user.delegated_amount(), 0);
         assert_eq!(user.next_action_timestamp, U64(UNSTAKE_PERIOD));

@@ -151,11 +151,11 @@ impl Contract {
     pub fn internal_register_user(&mut self, sender_id: &AccountId, near_amount: Balance) {
         let user = User::new(near_amount);
         self.save_user(sender_id, user);
-        ext_astra::register_delegation(
-            sender_id.clone(),
-            self.owner_id.clone(),
-            (U128_LEN as Balance) * env::storage_byte_cost(),
-            GAS_FOR_REGISTER,
+        ext_astra::ext(self.owner_id.clone())
+        .with_static_gas(GAS_FOR_REGISTER)
+        .with_attached_deposit((U128_LEN as Balance) * env::storage_byte_cost())
+        .register_delegation(
+            sender_id.clone()
         );
     }
 

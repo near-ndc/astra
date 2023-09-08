@@ -410,12 +410,12 @@ impl Contract {
         };
         match result {
             PromiseOrValue::Promise(promise) => promise
-                .then(ext_self::on_proposal_callback(
-                    proposal_id,
-                    env::current_account_id(),
-                    0,
-                    GAS_FOR_FT_TRANSFER,
-                ))
+                .then(
+                    ext_self::ext(env::current_account_id())
+                        .with_static_gas(GAS_FOR_FT_TRANSFER)
+                        .on_proposal_callback(
+                            proposal_id
+                    ))
                 .into(),
             PromiseOrValue::Value(()) => self.internal_return_bonds(&policy, &proposal).into(),
         }

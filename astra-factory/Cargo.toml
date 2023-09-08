@@ -14,4 +14,6 @@ crate-type = ["cdylib", "rlib"]
 near-sdk.workspace = true
 
 [dev-dependencies]
-near-sdk-sim.workspace = true
+workspaces.workspace = true
+near-units.workspace = true
+

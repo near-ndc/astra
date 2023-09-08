@@ -4,7 +4,7 @@ use near_sdk::json_types::{Base58CryptoHash, U128};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, ext_contract, near_bindgen, AccountId, Balance, BorshStorageKey, CryptoHash,
-    PanicOnDefault, Promise, PromiseResult,
+    PanicOnDefault, Promise, PromiseResult, PromiseOrValue,
 };
 
 pub use crate::bounties::{Bounty, BountyClaim, VersionedBounty};

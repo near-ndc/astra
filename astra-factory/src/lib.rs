@@ -398,7 +398,7 @@ mod tests {
     use near_sdk::test_utils::{accounts, VMContextBuilder};
     use near_sdk::{testing_env, PromiseResult};
 
-    use near_sdk_sim::to_yocto;
+    use near_units::to_yocto;
 
     use super::*;
 

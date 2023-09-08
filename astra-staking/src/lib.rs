@@ -1,4 +1,4 @@
-use near_contract_standards::fungible_token::core_impl::ext_fungible_token;
+use near_contract_standards::fungible_token::core_impl::FungibleToken;
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::LookupMap;
@@ -31,7 +31,7 @@ pub const GAS_FOR_REGISTER: Gas = Gas(10_000_000_000_000);
 pub const GAS_FOR_UNDELEGATE: Gas = Gas(10_000_000_000_000);
 
 #[ext_contract(ext_astra)]
-pub trait Astra {
+pub trait ExtAstra {
     fn register_delegation(&mut self, account_id: AccountId);
     fn delegate(&mut self, account_id: AccountId, amount: U128);
     fn undelegate(&mut self, account_id: AccountId, amount: U128);
@@ -53,7 +53,7 @@ pub struct Contract {
 }
 
 #[ext_contract(ext_self)]
-pub trait Contract {
+pub trait ExtSelf {
     fn exchange_callback_post_withdraw(&mut self, sender_id: AccountId, amount: U128);
 }
 
@@ -90,12 +90,11 @@ impl Contract {
     pub fn delegate(&mut self, account_id: AccountId, amount: U128) -> Promise {
         let sender_id = env::predecessor_account_id();
         self.internal_delegate(sender_id, account_id.clone().into(), amount.0);
-        ext_astra::delegate(
+        ext_astra::ext(self.owner_id.clone())
+        .with_static_gas(GAS_FOR_DELEGATE)
+        .delegate(
             account_id.into(),
-            amount,
-            self.owner_id.clone(),
-            0,
-            GAS_FOR_DELEGATE,
+            amount
         )
     }
 
@@ -103,12 +102,11 @@ impl Contract {
     pub fn undelegate(&mut self, account_id: AccountId, amount: U128) -> Promise {
         let sender_id = env::predecessor_account_id();
         self.internal_undelegate(sender_id, account_id.clone().into(), amount.0);
-        ext_astra::undelegate(
+        ext_astra::ext(self.owner_id.clone())
+        .with_static_gas(GAS_FOR_UNDELEGATE)
+        .undelegate(
             account_id.into(),
-            amount,
-            self.owner_id.clone(),
-            0,
-            GAS_FOR_UNDELEGATE,
+            amount
         )
     }
 
@@ -125,13 +123,13 @@ impl Contract {
             1,
             GAS_FOR_FT_TRANSFER,
         )
-        .then(ext_self::exchange_callback_post_withdraw(
-            sender_id,
-            amount,
-            env::current_account_id(),
-            0,
-            GAS_FOR_FT_TRANSFER,
-        ))
+        .then(ext_self::ext(env::current_account_id())
+            .with_static_gas(GAS_FOR_FT_TRANSFER)
+            .exchange_callback_post_withdraw(
+                sender_id,
+                amount
+            )
+        )
     }
 
     #[private]
@@ -178,7 +176,7 @@ mod tests {
     use near_sdk::test_utils::{accounts, VMContextBuilder};
     use near_sdk::testing_env;
 
-    use near_sdk_sim::to_yocto;
+    use near_units::to_yocto;
 
     use super::*;
 

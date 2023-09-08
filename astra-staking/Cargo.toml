@@ -18,5 +18,6 @@ near-contract-standards.workspace = true
 hex.workspace = true
 
 [dev-dependencies]
-near-sdk-sim.workspace = true
+workspaces.workspace = true
 test-token = { path = "../test-token" }
+near-units.workspace = true

@@ -57,11 +57,6 @@ pub trait ExtSelf {
     fn exchange_callback_post_withdraw(&mut self, sender_id: AccountId, amount: U128);
 }
 
-#[ext_contract(ext_fungible_token)]
-pub trait FungibleTokenContract {
-    fn ft_transfer(&mut self, receiver_id: AccountId, amount: U128, memo: Option<String>);
-}
-
 #[near_bindgen]
 impl Contract {
     #[init]

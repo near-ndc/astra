@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
-use astra::{Action, ProposalInput, ProposalKind, OldAccountId, OLD_BASE_TOKEN};
-use near_sdk::{serde_json::json, Balance, AccountId, json_types::U128, ONE_NEAR};
+use astra::{Action, ProposalInput, ProposalKind, OldAccountId, OLD_BASE_TOKEN, Bounty};
+use near_sdk::{serde_json::json, Balance, AccountId, json_types::{U128, U64}, ONE_NEAR, env};
 // #![allow(dead_code)]
 // pub use near_sdk::json_types::{Base64VecU8, U64};
 // use near_sdk::{env, AccountId, Balance};
@@ -146,24 +146,30 @@ pub async fn add_transfer_proposal(
     Ok(())
 }
 
-// pub fn add_bounty_proposal(root: &UserAccount, dao: &Contract) -> ExecutionResult {
-//     add_proposal(
-//         root,
-//         dao,
-//         ProposalInput {
-//             description: "test".to_string(),
-//             kind: ProposalKind::AddBounty {
-//                 bounty: Bounty {
-//                     description: "test bounty".to_string(),
-//                     token: String::from(OLD_BASE_TOKEN),
-//                     amount: U128(to_yocto("10")),
-//                     times: 3,
-//                     max_deadline: U64(env::block_timestamp() + 10_000_000_000),
-//                 },
-//             },
-//         },
-//     )
-// }
+pub async fn add_bounty_proposal(root: Account, dao: &Contract) -> anyhow::Result<u64> {
+    let proposal = ProposalInput {
+        description: "test".to_string(),
+        kind: ProposalKind::AddBounty {
+            bounty: Bounty {
+                description: "test bounty".to_string(),
+                token: String::from(OLD_BASE_TOKEN),
+                amount: U128(ONE_NEAR * 10),
+                times: 3,
+                max_deadline: U64(env::block_timestamp() + 10_000_000_000),
+            },
+        },
+    };
+    let res = root
+        .call(dao.id(), "add_proposal")
+        .args_json(json!({"proposal": proposal}))
+        .max_gas()
+        .deposit(ONE_NEAR)
+        .transact()
+        .await?;
+    assert!(res.is_success(), "{:?}", res);
+
+    Ok(res.json()?)
+}
 
 pub async fn vote(users: Vec<Account>, dao: &Contract, proposal_id: u64) -> anyhow::Result<()> {
     for user in users.into_iter() {

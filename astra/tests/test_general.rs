@@ -114,7 +114,6 @@ async fn test_multi_council() -> anyhow::Result<()> {
         .transact();
     assert!(res1.await?.is_success());
 
-
     let user1 = gen_user_account(&worker, user(1).as_str()).await?;
     let _ = transfer_near(&worker, user1.id(), ONE_NEAR * 50).await?;
     let user2 = gen_user_account(&worker, user(2).as_str()).await?;
@@ -186,270 +185,319 @@ async fn test_multi_council() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_bounty_workflow() -> anyhow::Result<()> {
-    let (root, dao) = setup_dao();
-    let user1 = root.create_user(user(1), to_yocto("1000"));
-    let user2 = root.create_user(user(2), to_yocto("1000"));
+    let worker = workspaces::sandbox().await?;
+    let dao_contract = worker.dev_deploy(include_bytes!("../../res/astra.wasm")).await?;
+    let root = worker.dev_create_account().await?;
+    let config = Config {
+        name: "test".to_string(),
+        purpose: "to test".to_string(),
+        metadata: Base64VecU8(vec![]),
+    };
+    // initialize contract
+    let root_near_account: AccountId = root.id().parse().unwrap();
+    let res1 = dao_contract
+        .call("new")
+        .args_json(json!({
+            "config": config, "policy": VersionedPolicy::Default(vec![root_near_account])
+        }))
+        .max_gas()
+        .transact();
+    assert!(res1.await?.is_success());
+    // TODO: add setup_dao
+    
+    let user1 = gen_user_account(&worker, user(1).as_str()).await?;
+    let _ = transfer_near(&worker, user1.id(), ONE_NEAR * 900).await?;
+    let user2 = gen_user_account(&worker, user(2).as_str()).await?;
+    let _ = transfer_near(&worker, user2.id(), ONE_NEAR * 900).await?;
 
-    let mut proposal_id = add_bounty_proposal(&root, &dao).unwrap_json::<u64>();
+    let mut proposal_id = add_bounty_proposal(root.clone(), &dao_contract).await?;
     assert_eq!(proposal_id, 0);
-    call!(
-        root,
-        dao.act_proposal(proposal_id, Action::VoteApprove, None)
-    )
-    .assert_success();
 
-    let bounty_id = view!(dao.get_last_bounty_id()).unwrap_json::<u64>() - 1;
+    vote(vec![root.clone()], &dao_contract, proposal_id).await?;
+
+    let mut bounty_id: u64 = dao_contract.call("get_last_bounty_id").view().await?.json()?;
+    bounty_id -= 1u64;
+
     assert_eq!(bounty_id, 0);
+    let bounty: BountyOutput = dao_contract.call("get_bounty")
+                .args_json(json!({"id": bounty_id})).view().await?.json()?;
     assert_eq!(
-        view!(dao.get_bounty(bounty_id))
-            .unwrap_json::<BountyOutput>()
-            .bounty
-            .times,
+        bounty.bounty.times,
         3
     );
 
-    assert_eq!(to_yocto("1000"), user1.account().unwrap().amount);
-    call!(
-        user1,
-        dao.bounty_claim(bounty_id, U64::from(0)),
-        deposit = to_yocto("1")
-    )
-    .assert_success();
-    assert!(user1.account().unwrap().amount < to_yocto("999"));
+    assert_eq!(ONE_NEAR * 1000, user1.view_account().await?.balance);
+
+    let res = user1
+        .call(dao_contract.id(), "bounty_claim")
+        .args_json(json!({"id": bounty_id, "deadline": U64::from(0)}))
+        .max_gas()
+        .deposit(ONE_NEAR)
+        .transact()
+        .await?;
+    assert!(res.is_success(), "{:?}", res);
+
+    assert!(user1.view_account().await?.balance < ONE_NEAR * 999);
+
+    let bounty_claim: Vec<BountyClaim> = dao_contract.call("get_bounty_claims")
+                .args_json(json!({"account_id": user1.id()})).view().await?.json()?;
     assert_eq!(
-        view!(dao.get_bounty_claims(user1.account_id()))
-            .unwrap_json::<Vec<BountyClaim>>()
-            .len(),
-        1
-    );
-    assert_eq!(
-        view!(dao.get_bounty_number_of_claims(bounty_id)).unwrap_json::<u64>(),
+       bounty_claim.len(),
         1
     );
 
-    call!(user1, dao.bounty_giveup(bounty_id)).assert_success();
-    assert!(user1.account().unwrap().amount > to_yocto("999"));
+    let bounty_claim: u64 = dao_contract.call("get_bounty_number_of_claims")
+            .args_json(json!({"id": bounty_id})).view().await?.json()?;
     assert_eq!(
-        view!(dao.get_bounty_claims(user1.account_id()))
-            .unwrap_json::<Vec<BountyClaim>>()
-            .len(),
+        bounty_claim,
+        1
+    );
+
+    let res = user1
+        .call(dao_contract.id(), "bounty_giveup")
+        .args_json(json!({"id": bounty_id}))
+        .max_gas()
+        .transact()
+        .await?;
+    assert!(res.is_success(), "{:?}", res);
+    assert!(user1.view_account().await?.balance > ONE_NEAR * 999);
+
+    let bounty_claim: Vec<BountyClaim> = dao_contract.call("get_bounty_claims")
+        .args_json(json!({"account_id": user1.id()})).view().await?.json()?;
+    assert_eq!(
+        bounty_claim.len(),
         0
     );
+    let bounty_claim_number: u64 = dao_contract.call("get_bounty_number_of_claims")
+        .args_json(json!({"id": bounty_id})).view().await?.json()?;
     assert_eq!(
-        view!(dao.get_bounty_number_of_claims(bounty_id)).unwrap_json::<u64>(),
+        bounty_claim_number,
         0
     );
 
-    assert_eq!(to_yocto("1000"), user2.account().unwrap().amount);
-    call!(
-        user2,
-        dao.bounty_claim(bounty_id, U64(env::block_timestamp() + 5_000_000_000)),
-        deposit = to_yocto("1")
-    )
-    .assert_success();
-    assert!(user2.account().unwrap().amount < to_yocto("999"));
+    assert_eq!(ONE_NEAR * 1000, user2.view_account().await?.balance);
+
+    let res = user2
+        .call(dao_contract.id(), "bounty_claim")
+        .args_json(json!({"id": bounty_id, "deadline": U64(env::block_timestamp() + 5_000_000_000)}))
+        .max_gas()
+        .deposit(ONE_NEAR)
+        .transact()
+        .await?;
+    assert!(res.is_success(), "{:?}", res);
+    assert!(user2.view_account().await?.balance < ONE_NEAR * 999);
+
+    let bounty_claim: Vec<BountyClaim> = dao_contract.call("get_bounty_claims")
+        .args_json(json!({"account_id": user2.id()})).view().await?.json()?;
     assert_eq!(
-        view!(dao.get_bounty_claims(user2.account_id()))
-            .unwrap_json::<Vec<BountyClaim>>()
-            .len(),
+        bounty_claim.len(),
         1
     );
+    let bounty_claim_number: u64 = dao_contract.call("get_bounty_number_of_claims")
+        .args_json(json!({"id": bounty_id})).view().await?.json()?;
     assert_eq!(
-        view!(dao.get_bounty_number_of_claims(bounty_id)).unwrap_json::<u64>(),
+        bounty_claim_number,
         1
     );
 
-    call!(
-        user2,
-        dao.bounty_done(bounty_id, None, "Bounty is done".to_string()),
-        deposit = to_yocto("1")
-    )
-    .assert_success();
-    assert!(user2.account().unwrap().amount < to_yocto("998"));
-    proposal_id = view!(dao.get_last_proposal_id()).unwrap_json::<u64>() - 1;
+    let res = user2
+        .call(dao_contract.id(), "bounty_done")
+        .args_json(json!({"id": bounty_id, "description": "Bounty is done".to_string()}))
+        .max_gas()
+        .deposit(ONE_NEAR)
+        .transact()
+        .await?;
+    assert!(res.is_success(), "{:?}", res);
+    assert!(user2.view_account().await?.balance < ONE_NEAR * 998);
+
+    let latest_prop_id: u64 = dao_contract.call("get_last_proposal_id").view().await?.json()?;
+    proposal_id = latest_prop_id - 1u64;
     assert_eq!(proposal_id, 1);
+
+    let prop_out: ProposalOutput = dao_contract.call("get_proposal")
+        .args_json(json!({"id": proposal_id})).view().await?.json()?;
     assert_eq!(
-        view!(dao.get_proposal(proposal_id))
-            .unwrap_json::<ProposalOutput>()
+        prop_out
             .proposal
             .kind
             .to_policy_label(),
         "bounty_done"
     );
 
-    call!(
-        root,
-        dao.act_proposal(proposal_id, Action::VoteApprove, None)
-    )
-    .assert_success();
-    assert!(user2.account().unwrap().amount > to_yocto("999"));
+    vote(vec![root.clone()], &dao_contract, proposal_id).await?;
+
+    assert!(user2.view_account().await?.balance > ONE_NEAR * 999);
+
+    let bounty_claim: Vec<BountyClaim> = dao_contract.call("get_bounty_claims")
+        .args_json(json!({"account_id": user2.id()})).view().await?.json()?;
     assert_eq!(
-        view!(dao.get_bounty_claims(user2.account_id()))
-            .unwrap_json::<Vec<BountyClaim>>()
-            .len(),
+        bounty_claim.len(),
         0
     );
+    let bounty_claim_number: u64 = dao_contract.call("get_bounty_number_of_claims")
+        .args_json(json!({"id": bounty_id})).view().await?.json()?;
     assert_eq!(
-        view!(dao.get_bounty_number_of_claims(bounty_id)).unwrap_json::<u64>(),
+        bounty_claim_number,
         0
     );
+    let bounty: BountyOutput = dao_contract.call("get_bounty")
+                .args_json(json!({"id": bounty_id})).view().await?.json()?;
     assert_eq!(
-        view!(dao.get_bounty(bounty_id))
-            .unwrap_json::<BountyOutput>()
-            .bounty
-            .times,
+        bounty.bounty.times,
         2
     );
+
+    Ok(())
 }
 
-// #[test]
-// fn test_create_dao_and_use_token() {
-//     let (root, dao) = setup_dao();
-//     let user2 = root.create_user(user(2), to_yocto("1000"));
-//     let user3 = root.create_user(user(3), to_yocto("1000"));
-//     let test_token = setup_test_token(&root);
-//     let staking = setup_staking(&root);
+#[tokio::test]
+async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
+    let (root, dao) = setup_dao();
+    let user2 = root.create_user(user(2), to_yocto("1000"));
+    let user3 = root.create_user(user(3), to_yocto("1000"));
+    let test_token = setup_test_token(&root);
+    let staking = setup_staking(&root);
 
-//     assert!(view!(dao.get_staking_contract())
-//         .unwrap_json::<String>()
-//         .is_empty());
-//     add_member_proposal(&root, &dao, user2.account_id.clone()).assert_success();
-//     assert_eq!(view!(dao.get_last_proposal_id()).unwrap_json::<u64>(), 1);
-//     // Voting by user who is not member should fail.
-//     should_fail(call!(user2, dao.act_proposal(0, Action::VoteApprove, None)));
-//     call!(root, dao.act_proposal(0, Action::VoteApprove, None)).assert_success();
-//     // voting second time should fail.
-//     should_fail(call!(root, dao.act_proposal(0, Action::VoteApprove, None)));
-//     // Add 3rd member.
-//     add_member_proposal(&user2, &dao, user3.account_id.clone()).assert_success();
-//     vote(vec![&root, &user2], &dao, 1);
-//     let policy = view!(dao.get_policy()).unwrap_json::<Policy>();
-//     assert_eq!(policy.roles.len(), 2);
-//     assert_eq!(
-//         policy.roles[1].kind,
-//         RoleKind::Group(
-//             vec![
-//                 root.account_id.clone(),
-//                 user2.account_id.clone(),
-//                 user3.account_id.clone()
-//             ]
-//             .into_iter()
-//             .collect()
-//         )
-//     );
-//     add_proposal(
-//         &user2,
-//         &dao,
-//         ProposalInput {
-//             description: "test".to_string(),
-//             kind: ProposalKind::SetStakingContract {
-//                 staking_id: "staking".parse().unwrap(),
-//             },
-//         },
-//     )
-//     .assert_success();
-//     vote(vec![&user3, &user2], &dao, 2);
-//     assert!(!view!(dao.get_staking_contract())
-//         .unwrap_json::<String>()
-//         .is_empty());
-//     assert_eq!(
-//         view!(dao.get_proposal(2)).unwrap_json::<Proposal>().status,
-//         ProposalStatus::Approved
-//     );
+    assert!(view!(dao.get_staking_contract())
+        .unwrap_json::<String>()
+        .is_empty());
+    add_member_proposal(&root, &dao, user2.account_id.clone()).assert_success();
+    assert_eq!(view!(dao.get_last_proposal_id()).unwrap_json::<u64>(), 1);
+    // Voting by user who is not member should fail.
+    should_fail(call!(user2, dao.act_proposal(0, Action::VoteApprove, None)));
+    call!(root, dao.act_proposal(0, Action::VoteApprove, None)).assert_success();
+    // voting second time should fail.
+    should_fail(call!(root, dao.act_proposal(0, Action::VoteApprove, None)));
+    // Add 3rd member.
+    add_member_proposal(&user2, &dao, user3.account_id.clone()).assert_success();
+    vote(vec![&root, &user2], &dao, 1);
+    let policy = view!(dao.get_policy()).unwrap_json::<Policy>();
+    assert_eq!(policy.roles.len(), 2);
+    assert_eq!(
+        policy.roles[1].kind,
+        RoleKind::Group(
+            vec![
+                root.account_id.clone(),
+                user2.account_id.clone(),
+                user3.account_id.clone()
+            ]
+            .into_iter()
+            .collect()
+        )
+    );
+    add_proposal(
+        &user2,
+        &dao,
+        ProposalInput {
+            description: "test".to_string(),
+            kind: ProposalKind::SetStakingContract {
+                staking_id: "staking".parse().unwrap(),
+            },
+        },
+    )
+    .assert_success();
+    vote(vec![&user3, &user2], &dao, 2);
+    assert!(!view!(dao.get_staking_contract())
+        .unwrap_json::<String>()
+        .is_empty());
+    assert_eq!(
+        view!(dao.get_proposal(2)).unwrap_json::<Proposal>().status,
+        ProposalStatus::Approved
+    );
 
-//     staking
-//         .user_account
-//         .view_method_call(staking.contract.ft_total_supply());
-//     assert_eq!(
-//         view!(staking.ft_total_supply()).unwrap_json::<U128>().0,
-//         to_yocto("0")
-//     );
-//     call!(
-//         user2,
-//         test_token.mint(user2.account_id.clone(), U128(to_yocto("100")))
-//     )
-//     .assert_success();
-//     call!(
-//         user2,
-//         test_token.storage_deposit(Some(staking.account_id()), None),
-//         deposit = to_yocto("1")
-//     )
-//     .assert_success();
-//     call!(
-//         user2,
-//         staking.storage_deposit(None, None),
-//         deposit = to_yocto("1")
-//     );
-//     call!(
-//         user2,
-//         test_token.ft_transfer_call(
-//             staking.account_id(),
-//             U128(to_yocto("10")),
-//             None,
-//             "".to_string()
-//         ),
-//         deposit = 1
-//     )
-//     .assert_success();
-//     assert_eq!(
-//         view!(staking.ft_total_supply()).unwrap_json::<U128>().0,
-//         to_yocto("10")
-//     );
-//     let user2_id = user2.account_id.clone();
-//     assert_eq!(
-//         view!(staking.ft_balance_of(user2_id.clone()))
-//             .unwrap_json::<U128>()
-//             .0,
-//         to_yocto("10")
-//     );
-//     assert_eq!(
-//         view!(test_token.ft_balance_of(user2_id.clone()))
-//             .unwrap_json::<U128>()
-//             .0,
-//         to_yocto("90")
-//     );
-//     call!(user2, staking.withdraw(U128(to_yocto("5")))).assert_success();
-//     assert_eq!(
-//         view!(staking.ft_total_supply()).unwrap_json::<U128>().0,
-//         to_yocto("5")
-//     );
-//     assert_eq!(
-//         view!(test_token.ft_balance_of(user2_id.clone()))
-//             .unwrap_json::<U128>()
-//             .0,
-//         to_yocto("95")
-//     );
-//     call!(
-//         user2,
-//         staking.delegate(user2_id.clone(), U128(to_yocto("5")))
-//     )
-//     .assert_success();
-//     call!(
-//         user2,
-//         staking.undelegate(user2_id.clone(), U128(to_yocto("1")))
-//     )
-//     .assert_success();
-//     // should fail right after undelegation as need to wait for voting period before can delegate again.
-//     should_fail(call!(
-//         user2,
-//         staking.delegate(user2_id.clone(), U128(to_yocto("1")))
-//     ));
-//     let user = view!(staking.get_user(user2_id.clone())).unwrap_json::<User>();
-//     assert_eq!(
-//         user.delegated_amounts,
-//         vec![(user2_id.clone(), U128(to_yocto("4")))]
-//     );
-//     assert_eq!(
-//         view!(dao.delegation_total_supply()).unwrap_json::<U128>().0,
-//         to_yocto("4")
-//     );
-//     assert_eq!(
-//         view!(dao.delegation_balance_of(user2_id.clone()))
-//             .unwrap_json::<U128>()
-//             .0,
-//         to_yocto("4")
-//     );
-// }
+    staking
+        .user_account
+        .view_method_call(staking.contract.ft_total_supply());
+    assert_eq!(
+        view!(staking.ft_total_supply()).unwrap_json::<U128>().0,
+        to_yocto("0")
+    );
+    call!(
+        user2,
+        test_token.mint(user2.account_id.clone(), U128(to_yocto("100")))
+    )
+    .assert_success();
+    call!(
+        user2,
+        test_token.storage_deposit(Some(staking.account_id()), None),
+        deposit = to_yocto("1")
+    )
+    .assert_success();
+    call!(
+        user2,
+        staking.storage_deposit(None, None),
+        deposit = to_yocto("1")
+    );
+    call!(
+        user2,
+        test_token.ft_transfer_call(
+            staking.account_id(),
+            U128(to_yocto("10")),
+            None,
+            "".to_string()
+        ),
+        deposit = 1
+    )
+    .assert_success();
+    assert_eq!(
+        view!(staking.ft_total_supply()).unwrap_json::<U128>().0,
+        to_yocto("10")
+    );
+    let user2_id = user2.account_id.clone();
+    assert_eq!(
+        view!(staking.ft_balance_of(user2_id.clone()))
+            .unwrap_json::<U128>()
+            .0,
+        to_yocto("10")
+    );
+    assert_eq!(
+        view!(test_token.ft_balance_of(user2_id.clone()))
+            .unwrap_json::<U128>()
+            .0,
+        to_yocto("90")
+    );
+    call!(user2, staking.withdraw(U128(to_yocto("5")))).assert_success();
+    assert_eq!(
+        view!(staking.ft_total_supply()).unwrap_json::<U128>().0,
+        to_yocto("5")
+    );
+    assert_eq!(
+        view!(test_token.ft_balance_of(user2_id.clone()))
+            .unwrap_json::<U128>()
+            .0,
+        to_yocto("95")
+    );
+    call!(
+        user2,
+        staking.delegate(user2_id.clone(), U128(to_yocto("5")))
+    )
+    .assert_success();
+    call!(
+        user2,
+        staking.undelegate(user2_id.clone(), U128(to_yocto("1")))
+    )
+    .assert_success();
+    // should fail right after undelegation as need to wait for voting period before can delegate again.
+    should_fail(call!(
+        user2,
+        staking.delegate(user2_id.clone(), U128(to_yocto("1")))
+    ));
+    let user = view!(staking.get_user(user2_id.clone())).unwrap_json::<User>();
+    assert_eq!(
+        user.delegated_amounts,
+        vec![(user2_id.clone(), U128(to_yocto("4")))]
+    );
+    assert_eq!(
+        view!(dao.delegation_total_supply()).unwrap_json::<U128>().0,
+        to_yocto("4")
+    );
+    assert_eq!(
+        view!(dao.delegation_balance_of(user2_id.clone()))
+            .unwrap_json::<U128>()
+            .0,
+        to_yocto("4")
+    );
+}
 
 // /// Test various cases that must fail.
 // #[test]

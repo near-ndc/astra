@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use near_sdk::json_types::{U128, Base64VecU8};
+use near_sdk::json_types::{U128, Base64VecU8, U64};
 use near_sdk::serde_json::json;
 use near_sdk::{env, AccountId, ONE_NEAR};
 use workspaces::{Account, Contract, DevNetwork, Worker, AccountId as WorkAccountId};
@@ -16,7 +16,7 @@ use astra::{
 mod utils;
 
 fn user(id: u32) -> AccountId {
-    format!("user{}", id).parse().unwrap()
+    format!("user{}.test.near", id).parse().unwrap()
 }
 
 #[tokio::test]
@@ -93,181 +93,214 @@ async fn test_large_policy() -> anyhow::Result<()> {
     Ok(())
 }
 
-// #[test]
-// fn test_multi_council() {
-//     let (root, dao) = setup_dao();
-//     let user1 = root.create_user(user(1), to_yocto("1000"));
-//     let user2 = root.create_user(user(2), to_yocto("1000"));
-//     let user3 = root.create_user(user(3), to_yocto("1000"));
-//     let new_policy = Policy {
-//         roles: vec![
-//             RolePermission {
-//                 name: "all".to_string(),
-//                 kind: RoleKind::Everyone,
-//                 permissions: vec!["*:AddProposal".to_string()].into_iter().collect(),
-//                 vote_policy: HashMap::default(),
-//             },
-//             RolePermission {
-//                 name: "council".to_string(),
-//                 kind: RoleKind::Group(vec![user(1), user(2)].into_iter().collect()),
-//                 permissions: vec!["*:*".to_string()].into_iter().collect(),
-//                 vote_policy: HashMap::default(),
-//             },
-//             RolePermission {
-//                 name: "community".to_string(),
-//                 kind: RoleKind::Group(vec![user(1), user(3), user(4)].into_iter().collect()),
-//                 permissions: vec!["*:*".to_string()].into_iter().collect(),
-//                 vote_policy: HashMap::default(),
-//             },
-//         ],
-//         default_vote_policy: VotePolicy::default(),
-//         proposal_bond: U128(10u128.pow(24)),
-//         proposal_period: U64::from(1_000_000_000 * 60 * 60 * 24 * 7),
-//         bounty_bond: U128(10u128.pow(24)),
-//         bounty_forgiveness_period: U64::from(1_000_000_000 * 60 * 60 * 24),
-//     };
-//     add_proposal(
-//         &root,
-//         &dao,
-//         ProposalInput {
-//             description: "new policy".to_string(),
-//             kind: ProposalKind::ChangePolicy {
-//                 policy: VersionedPolicy::Current(new_policy.clone()),
-//             },
-//         },
-//     )
-//     .assert_success();
-//     vote(vec![&root], &dao, 0);
-//     assert_eq!(view!(dao.get_policy()).unwrap_json::<Policy>(), new_policy);
-//     add_transfer_proposal(&root, &dao, base_token(), user(1), 1_000_000, None).assert_success();
-//     vote(vec![&user2], &dao, 1);
-//     vote(vec![&user3], &dao, 1);
-//     let proposal = view!(dao.get_proposal(1)).unwrap_json::<Proposal>();
-//     // Votes from members in different councils.
-//     assert_eq!(proposal.status, ProposalStatus::InProgress);
-//     // Finish with vote that is in both councils, which approves the proposal.
-//     vote(vec![&user1], &dao, 1);
-//     let proposal = view!(dao.get_proposal(1)).unwrap_json::<Proposal>();
-//     assert_eq!(proposal.status, ProposalStatus::Approved);
-// }
+#[tokio::test]
+async fn test_multi_council() -> anyhow::Result<()> {
+    let worker = workspaces::sandbox().await?;
+    let dao_contract = worker.dev_deploy(include_bytes!("../../res/astra.wasm")).await?;
+    let root = worker.dev_create_account().await?;
+    let config = Config {
+        name: "test".to_string(),
+        purpose: "to test".to_string(),
+        metadata: Base64VecU8(vec![]),
+    };
+    // initialize contract
+    let root_near_account: AccountId = root.id().parse().unwrap();
+    let res1 = dao_contract
+        .call("new")
+        .args_json(json!({
+            "config": config, "policy": VersionedPolicy::Default(vec![root_near_account])
+        }))
+        .max_gas()
+        .transact();
+    assert!(res1.await?.is_success());
 
-// #[test]
-// fn test_bounty_workflow() {
-//     let (root, dao) = setup_dao();
-//     let user1 = root.create_user(user(1), to_yocto("1000"));
-//     let user2 = root.create_user(user(2), to_yocto("1000"));
 
-//     let mut proposal_id = add_bounty_proposal(&root, &dao).unwrap_json::<u64>();
-//     assert_eq!(proposal_id, 0);
-//     call!(
-//         root,
-//         dao.act_proposal(proposal_id, Action::VoteApprove, None)
-//     )
-//     .assert_success();
+    let user1 = gen_user_account(&worker, user(1).as_str()).await?;
+    let _ = transfer_near(&worker, user1.id(), ONE_NEAR * 50).await?;
+    let user2 = gen_user_account(&worker, user(2).as_str()).await?;
+    let _ = transfer_near(&worker, user2.id(), ONE_NEAR * 50).await?;
+    let user3 = gen_user_account(&worker, user(3).as_str()).await?;
+    let _ = transfer_near(&worker, user3.id(), ONE_NEAR * 50).await?;
 
-//     let bounty_id = view!(dao.get_last_bounty_id()).unwrap_json::<u64>() - 1;
-//     assert_eq!(bounty_id, 0);
-//     assert_eq!(
-//         view!(dao.get_bounty(bounty_id))
-//             .unwrap_json::<BountyOutput>()
-//             .bounty
-//             .times,
-//         3
-//     );
+    let new_policy = Policy {
+        roles: vec![
+            RolePermission {
+                name: "all".to_string(),
+                kind: RoleKind::Everyone,
+                permissions: vec!["*:AddProposal".to_string()].into_iter().collect(),
+                vote_policy: HashMap::default(),
+            },
+            RolePermission {
+                name: "council".to_string(),
+                kind: RoleKind::Group(vec![user(1), user(2)].into_iter().collect()),
+                permissions: vec!["*:*".to_string()].into_iter().collect(),
+                vote_policy: HashMap::default(),
+            },
+            RolePermission {
+                name: "community".to_string(),
+                kind: RoleKind::Group(vec![user(1), user(3), user(4)].into_iter().collect()),
+                permissions: vec!["*:*".to_string()].into_iter().collect(),
+                vote_policy: HashMap::default(),
+            },
+        ],
+        default_vote_policy: VotePolicy::default(),
+        proposal_bond: U128(10u128.pow(24)),
+        proposal_period: U64::from(1_000_000_000 * 60 * 60 * 24 * 7),
+        bounty_bond: U128(10u128.pow(24)),
+        bounty_forgiveness_period: U64::from(1_000_000_000 * 60 * 60 * 24),
+    };
 
-//     assert_eq!(to_yocto("1000"), user1.account().unwrap().amount);
-//     call!(
-//         user1,
-//         dao.bounty_claim(bounty_id, U64::from(0)),
-//         deposit = to_yocto("1")
-//     )
-//     .assert_success();
-//     assert!(user1.account().unwrap().amount < to_yocto("999"));
-//     assert_eq!(
-//         view!(dao.get_bounty_claims(user1.account_id()))
-//             .unwrap_json::<Vec<BountyClaim>>()
-//             .len(),
-//         1
-//     );
-//     assert_eq!(
-//         view!(dao.get_bounty_number_of_claims(bounty_id)).unwrap_json::<u64>(),
-//         1
-//     );
+    let proposal = ProposalInput {
+        description: "new policy".to_string(),
+        kind: ProposalKind::ChangePolicy {
+            policy: VersionedPolicy::Current(new_policy.clone()),
+        },
+    };
+    let res2 = root.call(dao_contract.id(), "add_proposal")
+        .args_json(json!({"proposal": proposal}))
+        .gas(300_000_000_000_000)
+        .deposit(ONE_NEAR)
+        .transact()
+        .await?;
+    assert!(res2.is_success(), "{:?}", res2);
 
-//     call!(user1, dao.bounty_giveup(bounty_id)).assert_success();
-//     assert!(user1.account().unwrap().amount > to_yocto("999"));
-//     assert_eq!(
-//         view!(dao.get_bounty_claims(user1.account_id()))
-//             .unwrap_json::<Vec<BountyClaim>>()
-//             .len(),
-//         0
-//     );
-//     assert_eq!(
-//         view!(dao.get_bounty_number_of_claims(bounty_id)).unwrap_json::<u64>(),
-//         0
-//     );
+    vote(vec![root.clone()], &dao_contract, 0).await?;
 
-//     assert_eq!(to_yocto("1000"), user2.account().unwrap().amount);
-//     call!(
-//         user2,
-//         dao.bounty_claim(bounty_id, U64(env::block_timestamp() + 5_000_000_000)),
-//         deposit = to_yocto("1")
-//     )
-//     .assert_success();
-//     assert!(user2.account().unwrap().amount < to_yocto("999"));
-//     assert_eq!(
-//         view!(dao.get_bounty_claims(user2.account_id()))
-//             .unwrap_json::<Vec<BountyClaim>>()
-//             .len(),
-//         1
-//     );
-//     assert_eq!(
-//         view!(dao.get_bounty_number_of_claims(bounty_id)).unwrap_json::<u64>(),
-//         1
-//     );
+    let policy: Policy = dao_contract.call("get_policy").view().await?.json()?;
+    assert_eq!(policy, new_policy);
+    add_transfer_proposal(root.clone(), &dao_contract, base_token(), user(1), 1_000_000, None).await?;
 
-//     call!(
-//         user2,
-//         dao.bounty_done(bounty_id, None, "Bounty is done".to_string()),
-//         deposit = to_yocto("1")
-//     )
-//     .assert_success();
-//     assert!(user2.account().unwrap().amount < to_yocto("998"));
-//     proposal_id = view!(dao.get_last_proposal_id()).unwrap_json::<u64>() - 1;
-//     assert_eq!(proposal_id, 1);
-//     assert_eq!(
-//         view!(dao.get_proposal(proposal_id))
-//             .unwrap_json::<ProposalOutput>()
-//             .proposal
-//             .kind
-//             .to_policy_label(),
-//         "bounty_done"
-//     );
+    vote(vec![user2], &dao_contract, 1).await?;
+    vote(vec![user3], &dao_contract, 1).await?;
+    let proposal: Proposal = dao_contract.call("get_proposal").args_json(json!({"id":1})).view().await?.json()?;
+    // Votes from members in different councils.
+    assert_eq!(proposal.status, ProposalStatus::InProgress);
+    // Finish with vote that is in both councils, which approves the proposal.
+    vote(vec![user1], &dao_contract, 1).await?;
+    let proposal: Proposal = dao_contract.call("get_proposal").args_json(json!({"id":1})).view().await?.json()?;
+    assert_eq!(proposal.status, ProposalStatus::Approved);
 
-//     call!(
-//         root,
-//         dao.act_proposal(proposal_id, Action::VoteApprove, None)
-//     )
-//     .assert_success();
-//     assert!(user2.account().unwrap().amount > to_yocto("999"));
-//     assert_eq!(
-//         view!(dao.get_bounty_claims(user2.account_id()))
-//             .unwrap_json::<Vec<BountyClaim>>()
-//             .len(),
-//         0
-//     );
-//     assert_eq!(
-//         view!(dao.get_bounty_number_of_claims(bounty_id)).unwrap_json::<u64>(),
-//         0
-//     );
-//     assert_eq!(
-//         view!(dao.get_bounty(bounty_id))
-//             .unwrap_json::<BountyOutput>()
-//             .bounty
-//             .times,
-//         2
-//     );
-// }
+    Ok(())
+}
+
+
+#[tokio::test]
+async fn test_bounty_workflow() -> anyhow::Result<()> {
+    let (root, dao) = setup_dao();
+    let user1 = root.create_user(user(1), to_yocto("1000"));
+    let user2 = root.create_user(user(2), to_yocto("1000"));
+
+    let mut proposal_id = add_bounty_proposal(&root, &dao).unwrap_json::<u64>();
+    assert_eq!(proposal_id, 0);
+    call!(
+        root,
+        dao.act_proposal(proposal_id, Action::VoteApprove, None)
+    )
+    .assert_success();
+
+    let bounty_id = view!(dao.get_last_bounty_id()).unwrap_json::<u64>() - 1;
+    assert_eq!(bounty_id, 0);
+    assert_eq!(
+        view!(dao.get_bounty(bounty_id))
+            .unwrap_json::<BountyOutput>()
+            .bounty
+            .times,
+        3
+    );
+
+    assert_eq!(to_yocto("1000"), user1.account().unwrap().amount);
+    call!(
+        user1,
+        dao.bounty_claim(bounty_id, U64::from(0)),
+        deposit = to_yocto("1")
+    )
+    .assert_success();
+    assert!(user1.account().unwrap().amount < to_yocto("999"));
+    assert_eq!(
+        view!(dao.get_bounty_claims(user1.account_id()))
+            .unwrap_json::<Vec<BountyClaim>>()
+            .len(),
+        1
+    );
+    assert_eq!(
+        view!(dao.get_bounty_number_of_claims(bounty_id)).unwrap_json::<u64>(),
+        1
+    );
+
+    call!(user1, dao.bounty_giveup(bounty_id)).assert_success();
+    assert!(user1.account().unwrap().amount > to_yocto("999"));
+    assert_eq!(
+        view!(dao.get_bounty_claims(user1.account_id()))
+            .unwrap_json::<Vec<BountyClaim>>()
+            .len(),
+        0
+    );
+    assert_eq!(
+        view!(dao.get_bounty_number_of_claims(bounty_id)).unwrap_json::<u64>(),
+        0
+    );
+
+    assert_eq!(to_yocto("1000"), user2.account().unwrap().amount);
+    call!(
+        user2,
+        dao.bounty_claim(bounty_id, U64(env::block_timestamp() + 5_000_000_000)),
+        deposit = to_yocto("1")
+    )
+    .assert_success();
+    assert!(user2.account().unwrap().amount < to_yocto("999"));
+    assert_eq!(
+        view!(dao.get_bounty_claims(user2.account_id()))
+            .unwrap_json::<Vec<BountyClaim>>()
+            .len(),
+        1
+    );
+    assert_eq!(
+        view!(dao.get_bounty_number_of_claims(bounty_id)).unwrap_json::<u64>(),
+        1
+    );
+
+    call!(
+        user2,
+        dao.bounty_done(bounty_id, None, "Bounty is done".to_string()),
+        deposit = to_yocto("1")
+    )
+    .assert_success();
+    assert!(user2.account().unwrap().amount < to_yocto("998"));
+    proposal_id = view!(dao.get_last_proposal_id()).unwrap_json::<u64>() - 1;
+    assert_eq!(proposal_id, 1);
+    assert_eq!(
+        view!(dao.get_proposal(proposal_id))
+            .unwrap_json::<ProposalOutput>()
+            .proposal
+            .kind
+            .to_policy_label(),
+        "bounty_done"
+    );
+
+    call!(
+        root,
+        dao.act_proposal(proposal_id, Action::VoteApprove, None)
+    )
+    .assert_success();
+    assert!(user2.account().unwrap().amount > to_yocto("999"));
+    assert_eq!(
+        view!(dao.get_bounty_claims(user2.account_id()))
+            .unwrap_json::<Vec<BountyClaim>>()
+            .len(),
+        0
+    );
+    assert_eq!(
+        view!(dao.get_bounty_number_of_claims(bounty_id)).unwrap_json::<u64>(),
+        0
+    );
+    assert_eq!(
+        view!(dao.get_bounty(bounty_id))
+            .unwrap_json::<BountyOutput>()
+            .bounty
+            .times,
+        2
+    );
+}
 
 // #[test]
 // fn test_create_dao_and_use_token() {

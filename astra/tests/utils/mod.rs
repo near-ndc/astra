@@ -1,3 +1,7 @@
+use std::str::FromStr;
+
+use astra::{Action, ProposalInput, ProposalKind, OldAccountId, OLD_BASE_TOKEN};
+use near_sdk::{serde_json::json, Balance, AccountId, json_types::U128, ONE_NEAR};
 // #![allow(dead_code)]
 // pub use near_sdk::json_types::{Base64VecU8, U64};
 // use near_sdk::{env, AccountId, Balance};
@@ -5,7 +9,7 @@
 // use near_sdk_sim::{
 //     call, deploy, init_simulator, to_yocto, ContractAccount, ExecutionResult, UserAccount,
 // };
-
+use workspaces::{Contract, Account, Worker, DevNetwork, types::{SecretKey, KeyType}, network::Sandbox, result::ExecutionSuccess};
 // use near_sdk::json_types::U128;
 // use astra_staking::ContractContract as StakingContract;
 // use astra::{
@@ -24,9 +28,9 @@
 
 // type Contract = ContractAccount<DAOContract>;
 
-// pub fn base_token() -> Option<AccountId> {
-//     None
-// }
+pub fn base_token() -> Option<AccountId> {
+    None
+}
 
 // pub fn should_fail(r: ExecutionResult) {
 //     match r.status() {
@@ -113,28 +117,34 @@
 //     )
 // }
 
-// pub fn add_transfer_proposal(
-//     root: &UserAccount,
-//     dao: &Contract,
-//     token_id: Option<AccountId>,
-//     receiver_id: AccountId,
-//     amount: Balance,
-//     msg: Option<String>,
-// ) -> ExecutionResult {
-//     add_proposal(
-//         root,
-//         dao,
-//         ProposalInput {
-//             description: "test".to_string(),
-//             kind: ProposalKind::Transfer {
-//                 token_id: convert_new_to_old_token(token_id),
-//                 receiver_id,
-//                 amount: U128(amount),
-//                 msg,
-//             },
-//         },
-//     )
-// }
+pub async fn add_transfer_proposal(
+    root: Account,
+    dao: &Contract,
+    token_id: Option<AccountId>,
+    receiver_id: AccountId,
+    amount: Balance,
+    msg: Option<String>,
+) -> anyhow::Result<()> {
+    let proposal = ProposalInput {
+        description: "test".to_string(),
+        kind: ProposalKind::Transfer {
+            token_id: convert_new_to_old_token(token_id),
+            receiver_id,
+            amount: U128(amount),
+            msg,
+        },
+    };
+    let res = root
+    .call(dao.id(), "add_proposal")
+    .args_json(json!({"proposal": proposal}))
+    .max_gas()
+    .deposit(ONE_NEAR)
+    .transact()
+    .await?;
+    assert!(res.is_success(), "{:?}", res);
+
+    Ok(())
+}
 
 // pub fn add_bounty_proposal(root: &UserAccount, dao: &Contract) -> ExecutionResult {
 //     add_proposal(
@@ -155,19 +165,48 @@
 //     )
 // }
 
-// pub fn vote(users: Vec<&UserAccount>, dao: &Contract, proposal_id: u64) {
-//     for user in users.into_iter() {
-//         call!(
-//             user,
-//             dao.act_proposal(proposal_id, Action::VoteApprove, None)
-//         )
-//         .assert_success();
-//     }
-// }
+pub async fn vote(users: Vec<Account>, dao: &Contract, proposal_id: u64) -> anyhow::Result<()> {
+    for user in users.into_iter() {
+        let res = user
+            .call(dao.id(), "act_proposal")
+            .args_json(json!({"id": proposal_id, "action": Action::VoteApprove}))
+            .max_gas()
+            .transact()
+            .await?;
+        assert!(res.is_success(), "{:?}", res);
+    }
+    Ok(())
+}
 
-// pub fn convert_new_to_old_token(new_account_id: Option<AccountId>) -> OldAccountId {
-//     if new_account_id.is_none() {
-//         return String::from(OLD_BASE_TOKEN);
-//     }
-//     new_account_id.unwrap().to_string()
-// }
+pub fn convert_new_to_old_token(new_account_id: Option<AccountId>) -> OldAccountId {
+    if new_account_id.is_none() {
+        return String::from(OLD_BASE_TOKEN);
+    }
+    new_account_id.unwrap().to_string()
+}
+
+
+// Generate user sub-account
+pub async fn gen_user_account<T>(worker: &Worker<T>, account_id: &str) -> anyhow::Result<Account>
+where
+    T: DevNetwork + Send + Sync,
+{
+    let id = workspaces::AccountId::from_str(account_id)?;
+    let sk = SecretKey::from_random(KeyType::ED25519);
+
+    let account = worker.create_tla(id, sk).await?.into_result()?;
+
+    Ok(account)
+}
+
+pub async fn transfer_near(
+    worker: &Worker<Sandbox>,
+    account_id: &workspaces::AccountId,
+    deposit: Balance,
+) -> anyhow::Result<ExecutionSuccess> {
+    Ok(worker
+        .root_account()?
+        .transfer_near(account_id, deposit)
+        .await?
+        .into_result()?)
+}

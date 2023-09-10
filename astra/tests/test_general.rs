@@ -83,7 +83,6 @@ async fn test_large_policy() -> anyhow::Result<()> {
 
     let dao_list: Vec<AccountId>= factory_contract
         .call("get_dao_list")
-        //.args_json([])
         .view()
         .await?
         .json()?;

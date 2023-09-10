@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use near_sdk::json_types::{U128, Base64VecU8, U64};
 use near_sdk::serde_json::json;
 use near_sdk::{env, AccountId, ONE_NEAR};
-use workspaces::{Account, Contract, DevNetwork, Worker, AccountId as WorkAccountId};
 
 use crate::utils::*;
 use astra_staking::User;
@@ -19,7 +18,7 @@ fn user(id: u32) -> AccountId {
     format!("user{}.test.near", id).parse().unwrap()
 }
 
-//#[tokio::test]
+#[tokio::test]
 async fn test_large_policy() -> anyhow::Result<()> {
     let worker = workspaces::sandbox().await?;
     let factory_contract = worker.dev_deploy(include_bytes!("../../res/astra_factory.wasm")).await?;
@@ -93,7 +92,7 @@ async fn test_large_policy() -> anyhow::Result<()> {
     Ok(())
 }
 
-//#[tokio::test]
+#[tokio::test]
 async fn test_multi_council() -> anyhow::Result<()> {
     let (root, dao_contract, worker) = setup_dao().await?;
 
@@ -165,7 +164,7 @@ async fn test_multi_council() -> anyhow::Result<()> {
     Ok(())
 }
 
-//#[tokio::test]
+#[tokio::test]
 async fn test_bounty_workflow() -> anyhow::Result<()> {
     let (root, dao_contract, worker) = setup_dao().await?;
     
@@ -314,7 +313,7 @@ async fn test_bounty_workflow() -> anyhow::Result<()> {
     Ok(())
 }
 
-//#[tokio::test]
+#[tokio::test]
 async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
     let (root, dao, worker) = setup_dao().await?;
     let user2 = gen_user_account(&worker, user(2).as_str()).await?;
@@ -523,93 +522,112 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
     Ok(())
 }
 
-// /// Test various cases that must fail.
-// #[test]
-// fn test_failures() {
-//     let (root, dao) = setup_dao();
-//     should_fail(add_transfer_proposal(
-//         &root,
-//         &dao,
-//         base_token(),
-//         user(1),
-//         1_000_000,
-//         Some("some".to_string()),
-//     ));
-// }
+/// Test various cases that must fail.
+#[tokio::test]
+async fn test_failurestest_create_dao_and_use_token() -> anyhow::Result<()> {
+    let (root, dao, _) = setup_dao().await?;
 
-// /// Test payments that fail
-// #[test]
-// fn test_payment_failures() {
-//     let (root, dao) = setup_dao();
-//     let user1 = root.create_user(user(1), to_yocto("1000"));
-//     let whale = root.create_user(user(2), to_yocto("1000"));
+    let proposal = ProposalInput {
+        description: "test".to_string(),
+        kind: ProposalKind::Transfer {
+            token_id: convert_new_to_old_token(base_token()),
+            receiver_id: user(1),
+            amount: U128(1_000_000),
+            msg: Some("some".to_string()),
+        },
+    };
+    let res = root
+        .call(dao.id(), "add_proposal")
+        .args_json(json!({"proposal": proposal}))
+        .max_gas()
+        .transact()
+        .await?;
+    assert!(res.is_failure(), "{:?}", res);
 
-//     // Add user1
-//     add_member_proposal(&root, &dao, user1.account_id.clone()).assert_success();
-//     vote(vec![&root], &dao, 0);
+    Ok(())
+}
 
-//     // Set up fungible tokens and give 5 to the dao
-//     let test_token = setup_test_token(&root);
-//     call!(
-//         dao.user_account,
-//         test_token.mint(dao.user_account.account_id.clone(), U128(5))
-//     )
-//     .assert_success();
-//     call!(
-//         user1,
-//         test_token.storage_deposit(Some(user1.account_id.clone()), Some(true)),
-//         deposit = to_yocto("125")
-//     )
-//     .assert_success();
+// Test payments that fail
+#[tokio::test]
+async fn test_payment_failures() -> anyhow::Result<()> {
+    let (root, dao, worker) = setup_dao().await?;
+    let user1 = gen_user_account(&worker, user(1).as_str()).await?;
+    let _ = transfer_near(&worker, user1.id(), ONE_NEAR * 900).await?;
+    let whale = gen_user_account(&worker, user(2).as_str()).await?;
+    let _ = transfer_near(&worker, whale.id(), ONE_NEAR * 900).await?;
 
-//     // Attempt to transfer more than it has
-//     add_transfer_proposal(
-//         &root,
-//         &dao,
-//         Some(test_token.account_id()),
-//         user(1),
-//         10,
-//         None,
-//     )
-//     .assert_success();
+    // Add user1
+    add_member_proposal(root.clone(), &dao, user1.id().parse().unwrap()).await?;
+    vote(vec![root.clone()], &dao, 0).await?;
 
-//     // Vote in the transfer
-//     vote(vec![&root, &user1], &dao, 1);
-//     let mut proposal = view!(dao.get_proposal(1)).unwrap_json::<Proposal>();
-//     assert_eq!(proposal.status, ProposalStatus::Failed);
+    // Set up fungible tokens and give 5 to the dao
+    let (test_token, _) = setup_test_token(worker).await?;
+    let res = dao.as_account()
+        .call(test_token.id(), "mint")
+        .args_json(json!({"account_id": dao.id(), "amount": U128(5)}))
+        .max_gas()
+        .transact()
+        .await?;
+    assert!(res.is_success(), "{:?}", res);
 
-//     // Set up benefactor whale who will donate the needed tokens
-//     call!(
-//         whale,
-//         test_token.mint(whale.account_id.clone(), U128(6_000_000_000))
-//     )
-//     .assert_success();
-//     call!(
-//         whale,
-//         test_token.ft_transfer(
-//             dao.account_id(),
-//             U128::from(1000),
-//             Some("Heard you're in a pinch, let me help.".to_string())
-//         ),
-//         deposit = 1
-//     )
-//     .assert_success();
+    let res = user1
+        .call(test_token.id(), "storage_deposit")
+        .args_json(json!({"account_id": user1.id(), "registration_only": true}))
+        .max_gas()
+        .deposit(ONE_NEAR * 125)
+        .transact()
+        .await?;
+    assert!(res.is_success(), "{:?}", res);
 
-//     // Council member retries payment via an action
-//     call!(
-//         root,
-//         dao.act_proposal(
-//             1,
-//             Action::Finalize,
-//             Some("Sorry! We topped up our tokens. Thanks.".to_string())
-//         )
-//     )
-//     .assert_success();
+    // Attempt to transfer more than it has
+    add_transfer_proposal(
+        root.clone(),
+        &dao,
+        Some(test_token.id().parse().unwrap()),
+        user(1),
+        10,
+        None,
+    ).await?;
 
-//     proposal = view!(dao.get_proposal(1)).unwrap_json::<Proposal>();
-//     assert_eq!(
-//         proposal.status,
-//         ProposalStatus::Approved,
-//         "Did not return to approved status."
-//     );
-// }
+    // Vote in the transfer
+    vote(vec![root.clone(), user1.clone()], &dao, 1).await?;
+    let mut proposal: Proposal = dao.call("get_proposal").args_json(json!({"id": 1})).view().await?.json()?;
+
+    assert_eq!(proposal.status, ProposalStatus::Failed);
+
+    // Set up benefactor whale who will donate the needed tokens
+    let res = whale
+        .call(test_token.id(), "mint")
+        .args_json(json!({"account_id": whale.id(), "amount": U128(6_000_000_000)}))
+        .max_gas()
+        .transact()
+        .await?;
+    assert!(res.is_success(), "{:?}", res);
+
+    let res = whale
+        .call(test_token.id(), "ft_transfer")
+        .args_json(json!({"receiver_id": dao.id(), "amount": U128::from(1000), "msg": "Heard you're in a pinch, let me help.".to_string()}))
+        .max_gas()
+        .deposit(1)
+        .transact()
+        .await?;
+    assert!(res.is_success(), "{:?}", res);
+
+    // Council member retries payment via an action
+    let res = root
+            .call(dao.id(), "act_proposal")
+            .args_json(json!({"id": 1, "action": Action::Finalize, "msg": "Sorry! We topped up our tokens. Thanks.".to_string()}))
+            .max_gas()
+            .transact()
+            .await?;
+    assert!(res.is_success(), "{:?}", res);
+
+    proposal = dao.call("get_proposal").args_json(json!({"id": 1})).view().await?.json()?;
+    assert_eq!(
+        proposal.status,
+        ProposalStatus::Approved,
+        "Did not return to approved status."
+    );
+
+    Ok(())
+}

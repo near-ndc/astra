@@ -3,54 +3,11 @@ use std::str::FromStr;
 use anyhow::Ok;
 use astra::{Action, ProposalInput, ProposalKind, OldAccountId, OLD_BASE_TOKEN, Bounty, Config, VersionedPolicy};
 use near_sdk::{serde_json::json, Balance, AccountId, json_types::{U128, U64, Base64VecU8}, ONE_NEAR, env};
-// #![allow(dead_code)]
-// pub use near_sdk::json_types::{Base64VecU8, U64};
-// use near_sdk::{env, AccountId, Balance};
-// use near_sdk_sim::transaction::ExecutionStatus;
-// use near_sdk_sim::{
-//     call, deploy, init_simulator, to_yocto, ContractAccount, ExecutionResult, UserAccount,
-// };
 use workspaces::{AccountId as WorkAccountId, Contract, Account, Worker, DevNetwork, types::{SecretKey, KeyType}, network::Sandbox, result::ExecutionSuccess};
-// use near_sdk::json_types::U128;
-// use astra_staking::ContractContract as StakingContract;
-// use astra::{
-//     Action, Bounty, Config, ContractContract as DAOContract, OldAccountId, ProposalInput,
-//     ProposalKind, VersionedPolicy, OLD_BASE_TOKEN,
-// };
-// use astra_factory::AstraFactoryContract as FactoryContract;
-// use test_token::ContractContract as TestTokenContract;
-
-// near_sdk_sim::lazy_static_include::lazy_static_include_bytes! {
-//     FACTORY_WASM_BYTES => "../astra-factory/res/astra_factory.wasm",
-//     DAO_WASM_BYTES => "res/astra.wasm",
-//     TEST_TOKEN_WASM_BYTES => "../test-token/res/test_token.wasm",
-//     STAKING_WASM_BYTES => "../astra-staking/res/astra_staking.wasm",
-// }
-
-// type Contract = ContractAccount<DAOContract>;
 
 pub fn base_token() -> Option<AccountId> {
     None
 }
-
-// pub fn should_fail(r: ExecutionResult) {
-//     match r.status() {
-//         ExecutionStatus::Failure(_) => {}
-//         _ => panic!("Should fail"),
-//     }
-// }
-
-// pub async fn setup_factory(root: &UserAccount) -> ContractAccount<FactoryContract> {
-//     let worker = workspaces::sandbox().await?;
-//     let contract = worker.dev_deploy(include_bytes!("../../../res/astra_factory.wasm")).await?;
-//     deploy!(
-//         contract: FactoryContract,
-//         contract_id: "factory".to_string(),
-//         bytes: &FACTORY_WASM_BYTES,
-//         signer_account: root,
-//         deposit: to_yocto("500"),
-//     )
-// }
 
 pub async fn setup_dao() -> anyhow::Result<(Account, Contract, Worker<Sandbox>)> {
     let worker = workspaces::sandbox().await?;
@@ -98,23 +55,7 @@ pub async fn setup_staking(token_id: WorkAccountId, dao: WorkAccountId, worker: 
     assert!(res1.is_success(), "{:?}", res1);
 
     Ok((staking, worker))
-    // deploy!(
-    //     contract: StakingContract,
-    //     contract_id: "staking".to_string(),
-    //     bytes: &STAKING_WASM_BYTES,
-    //     signer_account: root,
-    //     deposit: to_yocto("100"),
-    //     init_method: new("dao".parse().unwrap(), "test_token".parse::<AccountId>().unwrap(), U64(100_000_000_000))
-    // )
 }
-
-// pub fn add_proposal(
-//     root: &UserAccount,
-//     dao: &Contract,
-//     proposal: ProposalInput,
-// ) -> ExecutionResult {
-//     call!(root, dao.add_proposal(proposal), deposit = to_yocto("1"))
-// }
 
 pub async fn add_member_proposal(
     root: Account,
@@ -138,17 +79,6 @@ pub async fn add_member_proposal(
     assert!(res.is_success(), "{:?}", res);
 
     Ok(())
-    // add_proposal(
-    //     root,
-    //     dao,
-    //     ProposalInput {
-    //         description: "test".to_string(),
-    //         kind: ProposalKind::AddMemberToRole {
-    //             member_id: member_id,
-    //             role: "council".to_string(),
-    //         },
-    //     },
-    // )
 }
 
 pub async fn add_transfer_proposal(

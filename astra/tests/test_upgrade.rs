@@ -48,7 +48,7 @@ async fn test_upgrade_using_factory() -> anyhow::Result<()> {
         .json()?;
     assert_eq!(dao_list, vec![dao_account_id.clone()]);
 
-    let dao = WorkAccountId::from_str(&dao_account_id.to_string())?;
+    let dao = WorkAccountId::from_str(dao_account_id.as_ref())?;
 
     let hash: Base58CryptoHash= factory_contract
         .call("get_default_code_hash")

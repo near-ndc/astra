@@ -38,7 +38,7 @@ export const workspaceWithoutInit = Workspace.init(async ({ root }) => {
 export const workspaceWithFactory = Workspace.init(async ({ root }) => {
     const factory = await root.createAndDeploy(
         'factory',
-        '../../../../astra-factory/res/astra_factory.wasm',
+        '../../../astra-factory/res/astra_factory.wasm',
         {
             initialBalance: toYocto('500'),
         },

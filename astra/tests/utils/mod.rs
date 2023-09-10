@@ -52,7 +52,7 @@ pub fn base_token() -> Option<AccountId> {
 //     )
 // }
 
-pub async fn setup_dao() -> anyhow::Result<(Account, Contract)> {
+pub async fn setup_dao() -> anyhow::Result<(Account, Contract, Worker<Sandbox>)> {
     let worker = workspaces::sandbox().await?;
     let dao_contract = worker.dev_deploy(include_bytes!("../../../res/astra.wasm")).await?;
     let root = worker.dev_create_account().await?;
@@ -71,23 +71,21 @@ pub async fn setup_dao() -> anyhow::Result<(Account, Contract)> {
         .max_gas()
         .transact();
     assert!(res1.await?.is_success());
-    Ok((root, dao_contract))
+    Ok((root, dao_contract, worker))
 }
 
-pub async fn setup_test_token() -> anyhow::Result<Contract> {
-    let worker = workspaces::sandbox().await?;
+pub async fn setup_test_token(worker: Worker<Sandbox>) -> anyhow::Result<(Contract, Worker<Sandbox>)> {
     let test_token = worker.dev_deploy(include_bytes!("../../../res/test_token.wasm")).await?;
     let res1 = test_token
         .call("new")
         .max_gas()
         .transact();
     assert!(res1.await?.is_success());
-  
-    Ok(test_token)
+
+    Ok((test_token, worker))
 }
 
-pub async fn setup_staking(token_id: WorkAccountId, dao: WorkAccountId) -> anyhow::Result<Contract> {
-    let worker = workspaces::sandbox().await?;
+pub async fn setup_staking(token_id: WorkAccountId, dao: WorkAccountId, worker: Worker<Sandbox>) -> anyhow::Result<(Contract, Worker<Sandbox>)> {
     let staking = worker.dev_deploy(include_bytes!("../../../res/astra_staking.wasm")).await?;
     let res1 = staking
         .call("new")
@@ -99,7 +97,7 @@ pub async fn setup_staking(token_id: WorkAccountId, dao: WorkAccountId) -> anyho
         .transact().await?;
     assert!(res1.is_success(), "{:?}", res1);
 
-    Ok(staking)
+    Ok((staking, worker))
     // deploy!(
     //     contract: StakingContract,
     //     contract_id: "staking".to_string(),

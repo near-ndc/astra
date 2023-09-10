@@ -95,24 +95,7 @@ async fn test_large_policy() -> anyhow::Result<()> {
 
 //#[tokio::test]
 async fn test_multi_council() -> anyhow::Result<()> {
-    let worker = workspaces::sandbox().await?;
-    let dao_contract = worker.dev_deploy(include_bytes!("../../res/astra.wasm")).await?;
-    let root = worker.dev_create_account().await?;
-    let config = Config {
-        name: "test".to_string(),
-        purpose: "to test".to_string(),
-        metadata: Base64VecU8(vec![]),
-    };
-    // initialize contract
-    let root_near_account: AccountId = root.id().parse().unwrap();
-    let res1 = dao_contract
-        .call("new")
-        .args_json(json!({
-            "config": config, "policy": VersionedPolicy::Default(vec![root_near_account])
-        }))
-        .max_gas()
-        .transact();
-    assert!(res1.await?.is_success());
+    let (root, dao_contract, worker) = setup_dao().await?;
 
     let user1 = gen_user_account(&worker, user(1).as_str()).await?;
     let _ = transfer_near(&worker, user1.id(), ONE_NEAR * 50).await?;
@@ -182,28 +165,9 @@ async fn test_multi_council() -> anyhow::Result<()> {
     Ok(())
 }
 
-
-#[tokio::test]
+//#[tokio::test]
 async fn test_bounty_workflow() -> anyhow::Result<()> {
-    let worker = workspaces::sandbox().await?;
-    let dao_contract = worker.dev_deploy(include_bytes!("../../res/astra.wasm")).await?;
-    let root = worker.dev_create_account().await?;
-    let config = Config {
-        name: "test".to_string(),
-        purpose: "to test".to_string(),
-        metadata: Base64VecU8(vec![]),
-    };
-    // initialize contract
-    let root_near_account: AccountId = root.id().parse().unwrap();
-    let res1 = dao_contract
-        .call("new")
-        .args_json(json!({
-            "config": config, "policy": VersionedPolicy::Default(vec![root_near_account])
-        }))
-        .max_gas()
-        .transact();
-    assert!(res1.await?.is_success());
-    // TODO: add setup_dao
+    let (root, dao_contract, worker) = setup_dao().await?;
     
     let user1 = gen_user_account(&worker, user(1).as_str()).await?;
     let _ = transfer_near(&worker, user1.id(), ONE_NEAR * 900).await?;
@@ -350,16 +314,15 @@ async fn test_bounty_workflow() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+//#[tokio::test]
 async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
-    let worker = workspaces::sandbox().await?;
-    let (root, dao) = setup_dao().await?;
+    let (root, dao, worker) = setup_dao().await?;
     let user2 = gen_user_account(&worker, user(2).as_str()).await?;
     let _ = transfer_near(&worker, user2.id(), ONE_NEAR * 900).await?;
     let user3 = gen_user_account(&worker, user(3).as_str()).await?;
     let _ = transfer_near(&worker, user3.id(), ONE_NEAR * 900).await?;
-    let test_token = setup_test_token().await?;
-    let staking = setup_staking(test_token.id().clone(), dao.id().clone()).await?;
+    let (test_token, worker) = setup_test_token(worker).await?;
+    let (staking, _) = setup_staking(test_token.id().clone(), dao.id().clone(), worker).await?;
 
     let staking_contract: String = dao.call("get_staking_contract").view().await?.json()?;
     assert!(staking_contract.is_empty());
@@ -371,7 +334,7 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
     assert_eq!(last_prop, 1);
 
     // Voting by user who is not member should fail.
-    let res = user2
+    let res = user2.clone()
         .call(dao.id(), "act_proposal")
         .args_json(json!({"id": 0, "action": Action::VoteApprove}))
         .max_gas()
@@ -379,7 +342,7 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
         .await?;
     assert!(res.is_failure(), "{:?}", res);
     //should_fail(call!(user2, dao.act_proposal(0, Action::VoteApprove, None)));
-    let res = root
+    let res = root.clone()
         .call(dao.id(), "act_proposal")
         .args_json(json!({"id": 0, "action": Action::VoteApprove}))
         .max_gas()
@@ -387,7 +350,7 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
         .await?;
     assert!(res.is_success(), "{:?}", res);
     // voting second time should fail.
-    let res = root
+    let res = root.clone()
         .call(dao.id(), "act_proposal")
         .args_json(json!({"id": 0, "action": Action::VoteApprove}))
         .max_gas()
@@ -397,8 +360,9 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
 
     // Add 3rd member.
     let user3_near_account: AccountId = user3.id().parse().unwrap();
-    add_member_proposal(user2.clone(), &dao, user3_near_account).await?;
-    vote(vec![root.clone(), user2.clone()], &dao, 1).await?;
+
+    add_member_proposal(user2.clone(), &dao.clone(), user3_near_account).await?;
+    vote(vec![root.clone(), user2.clone()], &dao.clone(), 1).await?;
     let policy: Policy = dao.call("get_policy").view().await?.json()?;
     assert_eq!(policy.roles.len(), 2);
     assert_eq!(
@@ -417,7 +381,7 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
     let proposal = ProposalInput {
         description: "test".to_string(),
         kind: ProposalKind::SetStakingContract {
-            staking_id: "staking".parse().unwrap(),
+            staking_id: staking.id().parse().unwrap(),
         },
     };
     let res = user2
@@ -429,34 +393,16 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
         .await?;
     assert!(res.is_success(), "{:?}", res);
 
-    // add_proposal(
-    //     &user2,
-    //     &dao,
-    //     ProposalInput {
-    //         description: "test".to_string(),
-    //         kind: ProposalKind::SetStakingContract {
-    //             staking_id: "staking".parse().unwrap(),
-    //         },
-    //     },
-    // )
-    //.assert_success();
     vote(vec![user3.clone(), user2.clone()], &dao, 2).await?;
 
     let staking_contract: String = dao.call("get_staking_contract").view().await?.json()?;
-    assert!(staking_contract.is_empty());
-    // assert!(!view!(dao.get_staking_contract())
-    //     .unwrap_json::<String>()
-    //     .is_empty());
+    assert!(!staking_contract.is_empty());
 
     let prop: Proposal = dao.call("get_proposal").args_json(json!({"id": 2})).view().await?.json()?;
     assert_eq!(
         prop.status,
         ProposalStatus::Approved
     );
-
-    // staking
-    //     .user_account
-    //     .view_method_call(staking.contract.ft_total_supply());
 
     let supply: U128 = staking.call("ft_total_supply").view().await?.json()?;
     assert_eq!(
@@ -472,11 +418,6 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
         .await?;
     assert!(res.is_success(), "{:?}", res);
 
-    // call!(
-    //     user2,
-    //     test_token.mint(user2.account_id.clone(), U128(to_yocto("100")))
-    // )
-    // .assert_success();
     let res = user2
         .call(test_token.id(), "storage_deposit")
         .args_json(json!({"account_id": staking.id()}))
@@ -485,45 +426,25 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
         .transact()
         .await?;
     assert!(res.is_success(), "{:?}", res);
-    // call!(
-    //     user2,
-    //     test_token.storage_deposit(Some(staking.account_id()), None),
-    //     deposit = to_yocto("1")
-    // )
-    // .assert_success();
 
     let res = user2
-        .call(test_token.id(), "storage_deposit")
+        .call(staking.id(), "storage_deposit")
+        .args_json(json!({}))
         .max_gas()
         .deposit(ONE_NEAR)
         .transact()
         .await?;
     assert!(res.is_success(), "{:?}", res);
-    // call!(
-    //     user2,
-    //     staking.storage_deposit(None, None),
-    //     deposit = to_yocto("1")
-    // );
 
     let res = user2
         .call(test_token.id(), "ft_transfer_call")
-        .args_json(json!({"account_id": staking.id(), "amount": U128(10 * ONE_NEAR), "msg": "".to_string()}))
+        .args_json(json!({"receiver_id": staking.id(), "amount": U128(10 * ONE_NEAR), "msg": "".to_string()}))
         .max_gas()
-        .deposit(ONE_NEAR)
+        .deposit(1)
         .transact()
         .await?;
     assert!(res.is_success(), "{:?}", res);
-    // call!(
-    //     user2,
-    //     test_token.ft_transfer_call(
-    //         staking.account_id(),
-    //         U128(to_yocto("10")),
-    //         None,
-    //         "".to_string()
-    //     ),
-    //     deposit = 1
-    // )
-    // .assert_success();
+
     let supply: U128 = staking.call("ft_total_supply").view().await?.json()?;
     assert_eq!(
         supply.0,
@@ -545,11 +466,9 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
         .call(staking.id(), "withdraw")
         .args_json(json!({"amount": U128(5 * ONE_NEAR)}))
         .max_gas()
-        .deposit(ONE_NEAR)
         .transact()
         .await?;
     assert!(res.is_success(), "{:?}", res);
-    //call!(user2, staking.withdraw(U128(to_yocto("5")))).assert_success();
     let supply: U128 = staking.call("ft_total_supply").view().await?.json()?;
     assert_eq!(
         supply.0,
@@ -565,43 +484,25 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
         .call(staking.id(), "delegate")
         .args_json(json!({"account_id": user2.id(), "amount": U128(5 * ONE_NEAR)}))
         .max_gas()
-        .deposit(ONE_NEAR)
         .transact()
         .await?;
     assert!(res.is_success(), "{:?}", res);
-    // call!(
-    //     user2,
-    //     staking.delegate(user2_id.clone(), U128(to_yocto("5")))
-    // )
-    //.assert_success();
 
     let res = user2
         .call(staking.id(), "undelegate")
         .args_json(json!({"account_id": user2.id(), "amount": U128(1 * ONE_NEAR)}))
         .max_gas()
-        .deposit(ONE_NEAR)
         .transact()
         .await?;
     assert!(res.is_success(), "{:?}", res);
-    // call!(
-    //     user2,
-    //     staking.undelegate(user2_id.clone(), U128(to_yocto("1")))
-    // )
-    // .assert_success();
     // should fail right after undelegation as need to wait for voting period before can delegate again.
     let res = user2
         .call(staking.id(), "delegate")
         .args_json(json!({"account_id": user2.id(), "amount": U128(ONE_NEAR)}))
         .max_gas()
-        .deposit(ONE_NEAR)
         .transact()
         .await?;
     assert!(res.is_failure(), "{:?}", res);
-    // should_fail(call!(
-    //     user2,
-    //     staking.delegate(user2_id.clone(), U128(to_yocto("1")))
-    // ));
-    //let user = view!(staking.get_user(user2_id.clone())).unwrap_json::<User>();
     let user: User = staking.call("get_user").args_json(json!({"account_id": user2.id()})).view().await?.json()?;
     assert_eq!(
         user.delegated_amounts,

@@ -1,7 +1,8 @@
 use std::str::FromStr;
 
-use astra::{Action, ProposalInput, ProposalKind, OldAccountId, OLD_BASE_TOKEN, Bounty};
-use near_sdk::{serde_json::json, Balance, AccountId, json_types::{U128, U64}, ONE_NEAR, env};
+use anyhow::Ok;
+use astra::{Action, ProposalInput, ProposalKind, OldAccountId, OLD_BASE_TOKEN, Bounty, Config, VersionedPolicy};
+use near_sdk::{serde_json::json, Balance, AccountId, json_types::{U128, U64, Base64VecU8}, ONE_NEAR, env};
 // #![allow(dead_code)]
 // pub use near_sdk::json_types::{Base64VecU8, U64};
 // use near_sdk::{env, AccountId, Balance};
@@ -9,7 +10,7 @@ use near_sdk::{serde_json::json, Balance, AccountId, json_types::{U128, U64}, ON
 // use near_sdk_sim::{
 //     call, deploy, init_simulator, to_yocto, ContractAccount, ExecutionResult, UserAccount,
 // };
-use workspaces::{Contract, Account, Worker, DevNetwork, types::{SecretKey, KeyType}, network::Sandbox, result::ExecutionSuccess};
+use workspaces::{AccountId as WorkAccountId, Contract, Account, Worker, DevNetwork, types::{SecretKey, KeyType}, network::Sandbox, result::ExecutionSuccess};
 // use near_sdk::json_types::U128;
 // use astra_staking::ContractContract as StakingContract;
 // use astra::{
@@ -51,45 +52,63 @@ pub fn base_token() -> Option<AccountId> {
 //     )
 // }
 
-// pub fn setup_dao() -> (UserAccount, Contract) {
-//     let root = init_simulator(None);
-//     let config = Config {
-//         name: "test".to_string(),
-//         purpose: "to test".to_string(),
-//         metadata: Base64VecU8(vec![]),
-//     };
-//     let dao = deploy!(
-//         contract: DAOContract,
-//         contract_id: "dao".to_string(),
-//         bytes: &DAO_WASM_BYTES,
-//         signer_account: root,
-//         deposit: to_yocto("200"),
-//         init_method: new(config, VersionedPolicy::Default(vec![root.account_id.clone()]))
-//     );
-//     (root, dao)
-// }
+pub async fn setup_dao() -> anyhow::Result<(Account, Contract)> {
+    let worker = workspaces::sandbox().await?;
+    let dao_contract = worker.dev_deploy(include_bytes!("../../../res/astra.wasm")).await?;
+    let root = worker.dev_create_account().await?;
+    let config = Config {
+        name: "test".to_string(),
+        purpose: "to test".to_string(),
+        metadata: Base64VecU8(vec![]),
+    };
+    // initialize contract
+    let root_near_account: AccountId = root.id().parse().unwrap();
+    let res1 = dao_contract
+        .call("new")
+        .args_json(json!({
+            "config": config, "policy": VersionedPolicy::Default(vec![root_near_account])
+        }))
+        .max_gas()
+        .transact();
+    assert!(res1.await?.is_success());
+    Ok((root, dao_contract))
+}
 
-// pub fn setup_test_token(root: &UserAccount) -> ContractAccount<TestTokenContract> {
-//     deploy!(
-//         contract: TestTokenContract,
-//         contract_id: "test_token".to_string(),
-//         bytes: &TEST_TOKEN_WASM_BYTES,
-//         signer_account: root,
-//         deposit: to_yocto("200"),
-//         init_method: new()
-//     )
-// }
+pub async fn setup_test_token() -> anyhow::Result<Contract> {
+    let worker = workspaces::sandbox().await?;
+    let test_token = worker.dev_deploy(include_bytes!("../../../res/test_token.wasm")).await?;
+    let res1 = test_token
+        .call("new")
+        .max_gas()
+        .transact();
+    assert!(res1.await?.is_success());
+  
+    Ok(test_token)
+}
 
-// pub fn setup_staking(root: &UserAccount) -> ContractAccount<StakingContract> {
-//     deploy!(
-//         contract: StakingContract,
-//         contract_id: "staking".to_string(),
-//         bytes: &STAKING_WASM_BYTES,
-//         signer_account: root,
-//         deposit: to_yocto("100"),
-//         init_method: new("dao".parse().unwrap(), "test_token".parse::<AccountId>().unwrap(), U64(100_000_000_000))
-//     )
-// }
+pub async fn setup_staking(token_id: WorkAccountId, dao: WorkAccountId) -> anyhow::Result<Contract> {
+    let worker = workspaces::sandbox().await?;
+    let staking = worker.dev_deploy(include_bytes!("../../../res/astra_staking.wasm")).await?;
+    let res1 = staking
+        .call("new")
+        .args_json(json!({
+            "owner_id": dao, "token_id": token_id,
+            "unstake_period": U64(100_000_000_000)
+        }))
+        .max_gas()
+        .transact().await?;
+    assert!(res1.is_success(), "{:?}", res1);
+
+    Ok(staking)
+    // deploy!(
+    //     contract: StakingContract,
+    //     contract_id: "staking".to_string(),
+    //     bytes: &STAKING_WASM_BYTES,
+    //     signer_account: root,
+    //     deposit: to_yocto("100"),
+    //     init_method: new("dao".parse().unwrap(), "test_token".parse::<AccountId>().unwrap(), U64(100_000_000_000))
+    // )
+}
 
 // pub fn add_proposal(
 //     root: &UserAccount,
@@ -99,23 +118,40 @@ pub fn base_token() -> Option<AccountId> {
 //     call!(root, dao.add_proposal(proposal), deposit = to_yocto("1"))
 // }
 
-// pub fn add_member_proposal(
-//     root: &UserAccount,
-//     dao: &Contract,
-//     member_id: AccountId,
-// ) -> ExecutionResult {
-//     add_proposal(
-//         root,
-//         dao,
-//         ProposalInput {
-//             description: "test".to_string(),
-//             kind: ProposalKind::AddMemberToRole {
-//                 member_id: member_id,
-//                 role: "council".to_string(),
-//             },
-//         },
-//     )
-// }
+pub async fn add_member_proposal(
+    root: Account,
+    dao: &Contract,
+    member_id: AccountId,
+) -> anyhow::Result<()> {
+    let proposal = ProposalInput {
+        description: "test".to_string(),
+        kind: ProposalKind::AddMemberToRole {
+            member_id: member_id,
+            role: "council".to_string(),
+        },
+    };
+    let res = root
+        .call(dao.id(), "add_proposal")
+        .args_json(json!({"proposal": proposal}))
+        .max_gas()
+        .deposit(ONE_NEAR)
+        .transact()
+        .await?;
+    assert!(res.is_success(), "{:?}", res);
+
+    Ok(())
+    // add_proposal(
+    //     root,
+    //     dao,
+    //     ProposalInput {
+    //         description: "test".to_string(),
+    //         kind: ProposalKind::AddMemberToRole {
+    //             member_id: member_id,
+    //             role: "council".to_string(),
+    //         },
+    //     },
+    // )
+}
 
 pub async fn add_transfer_proposal(
     root: Account,
@@ -135,12 +171,12 @@ pub async fn add_transfer_proposal(
         },
     };
     let res = root
-    .call(dao.id(), "add_proposal")
-    .args_json(json!({"proposal": proposal}))
-    .max_gas()
-    .deposit(ONE_NEAR)
-    .transact()
-    .await?;
+        .call(dao.id(), "add_proposal")
+        .args_json(json!({"proposal": proposal}))
+        .max_gas()
+        .deposit(ONE_NEAR)
+        .transact()
+        .await?;
     assert!(res.is_success(), "{:?}", res);
 
     Ok(())

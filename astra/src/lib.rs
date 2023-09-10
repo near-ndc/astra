@@ -187,7 +187,7 @@ mod tests {
             description: "test".to_string(),
             kind: ProposalKind::Transfer {
                 token_id: String::from(OLD_BASE_TOKEN),
-                receiver_id: accounts(2).into(),
+                receiver_id: accounts(2),
                 amount: U128(parse_near!("100 N")),
                 msg: None,
             },
@@ -200,7 +200,7 @@ mod tests {
         testing_env!(context.predecessor_account_id(accounts(1)).build());
         let mut contract = Contract::new(
             Config::test_config(),
-            VersionedPolicy::Default(vec![accounts(1).into()]),
+            VersionedPolicy::Default(vec![accounts(1)]),
         );
         let id = create_proposal(&mut context, &mut contract);
         assert_eq!(contract.get_proposal(id).proposal.description, "test");
@@ -232,7 +232,7 @@ mod tests {
         let _id = contract.add_proposal(ProposalInput {
             description: "test".to_string(),
             kind: ProposalKind::AddMemberToRole {
-                member_id: accounts(2).into(),
+                member_id: accounts(2),
                 role: "council".to_string(),
             },
         });
@@ -245,7 +245,7 @@ mod tests {
         testing_env!(context.predecessor_account_id(accounts(1)).build());
         let mut contract = Contract::new(
             Config::test_config(),
-            VersionedPolicy::Default(vec![accounts(1).into()]),
+            VersionedPolicy::Default(vec![accounts(1)]),
         );
         let id = create_proposal(&mut context, &mut contract);
         assert_eq!(contract.get_proposal(id).proposal.description, "test");
@@ -256,7 +256,7 @@ mod tests {
     fn test_remove_proposal_allowed() {
         let mut context = VMContextBuilder::new();
         testing_env!(context.predecessor_account_id(accounts(1)).build());
-        let mut policy = VersionedPolicy::Default(vec![accounts(1).into()]).upgrade();
+        let mut policy = VersionedPolicy::Default(vec![accounts(1)]).upgrade();
         policy.to_policy_mut().roles[1]
             .permissions
             .insert("*:RemoveProposal".to_string());
@@ -273,7 +273,7 @@ mod tests {
         testing_env!(context.predecessor_account_id(accounts(1)).build());
         let mut contract = Contract::new(
             Config::test_config(),
-            VersionedPolicy::Default(vec![accounts(1).into()]),
+            VersionedPolicy::Default(vec![accounts(1)]),
         );
         let id = create_proposal(&mut context, &mut contract);
         testing_env!(context
@@ -289,7 +289,7 @@ mod tests {
         testing_env!(context.predecessor_account_id(accounts(1)).build());
         let mut contract = Contract::new(
             Config::test_config(),
-            VersionedPolicy::Default(vec![accounts(1).into(), accounts(2).into()]),
+            VersionedPolicy::Default(vec![accounts(1), accounts(2)]),
         );
         let id = create_proposal(&mut context, &mut contract);
         contract.act_proposal(id, Action::VoteApprove, None);
@@ -302,13 +302,13 @@ mod tests {
         testing_env!(context.predecessor_account_id(accounts(1)).build());
         let mut contract = Contract::new(
             Config::test_config(),
-            VersionedPolicy::Default(vec![accounts(1).into()]),
+            VersionedPolicy::Default(vec![accounts(1)]),
         );
         testing_env!(context.attached_deposit(parse_near!("1 N")).build());
         let id = contract.add_proposal(ProposalInput {
             description: "test".to_string(),
             kind: ProposalKind::AddMemberToRole {
-                member_id: accounts(2).into(),
+                member_id: accounts(2),
                 role: "missing".to_string(),
             },
         });
@@ -325,7 +325,7 @@ mod tests {
         testing_env!(context.predecessor_account_id(accounts(1)).build());
         let mut contract = Contract::new(
             Config::test_config(),
-            VersionedPolicy::Default(vec![accounts(1).into()]),
+            VersionedPolicy::Default(vec![accounts(1)]),
         );
         testing_env!(context.attached_deposit(parse_near!("1 N")).build());
         let _id = contract.add_proposal(ProposalInput {

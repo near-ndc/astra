@@ -87,12 +87,7 @@ impl Contract {
     }
 
     fn internal_find_claim(&self, bounty_id: u64, claims: &[BountyClaim]) -> Option<usize> {
-        for i in 0..claims.len() {
-            if claims[i].bounty_id == bounty_id {
-                return Some(i);
-            }
-        }
-        None
+        (0..claims.len()).find(|&i| claims[i].bounty_id == bounty_id)
     }
 }
 
@@ -136,7 +131,7 @@ impl Contract {
     fn internal_remove_claim(&mut self, bounty_id: u64, claimer_id: &AccountId) {
         let (mut claims, claim_idx) = self.internal_get_claims(bounty_id, claimer_id);
         claims.remove(claim_idx);
-        if claims.len() == 0 {
+        if claims.is_empty() {
             self.bounty_claimers.remove(claimer_id);
         } else {
             self.bounty_claimers.insert(claimer_id, &claims);
@@ -148,7 +143,7 @@ impl Contract {
     fn internal_get_claims(&mut self, id: u64, sender_id: &AccountId) -> (Vec<BountyClaim>, usize) {
         let claims = self
             .bounty_claimers
-            .get(&sender_id)
+            .get(sender_id)
             .expect("ERR_NO_BOUNTY_CLAIMS");
         let claim_idx = self
             .internal_find_claim(id, &claims)
@@ -161,7 +156,7 @@ impl Contract {
     /// On expired, anyone can call it to free up the claim slot.
     #[payable]
     pub fn bounty_done(&mut self, id: u64, account_id: Option<AccountId>, description: String) {
-        let sender_id = account_id.unwrap_or_else(|| env::predecessor_account_id());
+        let sender_id = account_id.unwrap_or_else(env::predecessor_account_id);
         let (mut claims, claim_idx) = self.internal_get_claims(id, &sender_id);
         assert!(!claims[claim_idx].completed, "ERR_BOUNTY_CLAIM_COMPLETED");
         if env::block_timestamp() > claims[claim_idx].start_time.0 + claims[claim_idx].deadline.0 {
@@ -244,7 +239,7 @@ mod tests {
         testing_env!(context.predecessor_account_id(accounts(1)).build());
         let mut contract = Contract::new(
             Config::test_config(),
-            VersionedPolicy::Default(vec![accounts(1).into()]),
+            VersionedPolicy::Default(vec![accounts(1)]),
         );
         add_bounty(&mut context, &mut contract, 2);
 
@@ -307,7 +302,7 @@ mod tests {
         testing_env!(context.predecessor_account_id(accounts(1)).build());
         let mut contract = Contract::new(
             Config::test_config(),
-            VersionedPolicy::Default(vec![accounts(1).into()]),
+            VersionedPolicy::Default(vec![accounts(1)]),
         );
         let id = add_bounty(&mut context, &mut contract, 1);
         contract.bounty_claim(id, U64::from(500));

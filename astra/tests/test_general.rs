@@ -489,7 +489,7 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
 
     let res = user2
         .call(staking.id(), "undelegate")
-        .args_json(json!({"account_id": user2.id(), "amount": U128(1 * ONE_NEAR)}))
+        .args_json(json!({"account_id": user2.id(), "amount": U128(ONE_NEAR)}))
         .max_gas()
         .transact()
         .await?;

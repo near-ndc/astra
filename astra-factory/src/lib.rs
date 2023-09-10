@@ -357,7 +357,7 @@ impl AstraFactory {
         let storage_metadata = env::storage_read(CODE_METADATA_KEY).expect("INTERNAL_FAIL");
         let deserialized_metadata: UnorderedMap<Base58CryptoHash, DaoContractMetadata> =
             BorshDeserialize::try_from_slice(&storage_metadata).expect("INTERNAL_FAIL");
-        return deserialized_metadata.to_vec();
+        deserialized_metadata.to_vec()
     }
 
     fn assert_owner(&self) {
@@ -371,7 +371,7 @@ impl AstraFactory {
 
 pub fn slice_to_hash(hash: &[u8]) -> Base58CryptoHash {
     let mut result: CryptoHash = [0; 32];
-    result.copy_from_slice(&hash);
+    result.copy_from_slice(hash);
     Base58CryptoHash::from(result)
 }
 

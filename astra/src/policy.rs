@@ -371,12 +371,7 @@ impl Policy {
     }
 
     fn internal_get_role(&self, name: &String) -> Option<&RolePermission> {
-        for role in self.roles.iter() {
-            if role.name == *name {
-                return Some(role);
-            }
-        }
-        None
+        self.roles.iter().find(|&role| role.name == *name)
     }
 
     /// Get proposal status for given proposal.

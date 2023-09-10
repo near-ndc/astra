@@ -161,17 +161,17 @@ impl Contract {
 
     /// Deposit voting token.
     pub fn internal_deposit(&mut self, sender_id: &AccountId, amount: Balance) {
-        let mut sender = self.internal_get_user(&sender_id);
+        let mut sender = self.internal_get_user(sender_id);
         sender.deposit(amount);
-        self.save_user(&sender_id, sender);
+        self.save_user(sender_id, sender);
         self.total_amount += amount;
     }
 
     /// Withdraw voting token.
     pub fn internal_withdraw(&mut self, sender_id: &AccountId, amount: Balance) {
-        let mut sender = self.internal_get_user(&sender_id);
+        let mut sender = self.internal_get_user(sender_id);
         sender.withdraw(amount);
-        self.save_user(&sender_id, sender);
+        self.save_user(sender_id, sender);
         assert!(self.total_amount >= amount, "ERR_INTERNAL");
         self.total_amount -= amount;
     }
@@ -186,7 +186,7 @@ impl Contract {
     ) {
         let mut sender = self.internal_get_user(&sender_id);
         assert!(self.users.contains_key(&delegate_id), "ERR_NOT_REGISTERED");
-        sender.delegate(delegate_id.clone(), amount);
+        sender.delegate(delegate_id, amount);
         self.save_user(&sender_id, sender);
     }
 

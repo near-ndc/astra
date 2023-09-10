@@ -65,7 +65,7 @@ pub async fn add_member_proposal(
     let proposal = ProposalInput {
         description: "test".to_string(),
         kind: ProposalKind::AddMemberToRole {
-            member_id: member_id,
+            member_id,
             role: "council".to_string(),
         },
     };

@@ -29,7 +29,7 @@ export const workspaceWithoutInit = Workspace.init(async ({ root }) => {
     const alice = await root.createAccount('alice');
 
     //for short let's call it just dao
-    const dao = await root.createAndDeploy('dao', '../res/astra.wasm', {
+    const dao = await root.createAndDeploy('dao', '../../res/astra.wasm', {
         initialBalance: toYocto('200'),
     });
     return { alice, dao };
@@ -38,7 +38,7 @@ export const workspaceWithoutInit = Workspace.init(async ({ root }) => {
 export const workspaceWithFactory = Workspace.init(async ({ root }) => {
     const factory = await root.createAndDeploy(
         'factory',
-        '../../astra-factory/res/astra_factory.wasm',
+        '../../../astra-factory/res/astra_factory.wasm',
         {
             initialBalance: toYocto('500'),
         },
@@ -50,7 +50,7 @@ export const workspaceWithFactory = Workspace.init(async ({ root }) => {
 export async function initTestToken(root: NearAccount) {
     const testToken = await root.createAndDeploy(
         'test-token',
-        '../../test-token/res/test_token.wasm',
+        '../../../test-token/res/test_token.wasm',
         {
             method: 'new',
             initialBalance: toYocto('200'),
@@ -66,7 +66,7 @@ export async function initStaking(
 ) {
     const staking = await root.createAndDeploy(
         'staking',
-        '../../astra-staking/res/astra_staking.wasm',
+        '../../../astra-staking/res/astra_staking.wasm',
         {
             method: 'new',
             args: {

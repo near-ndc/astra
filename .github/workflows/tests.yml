@@ -20,8 +20,7 @@ jobs:
       - name: Build
         env:
           IS_GITHUB_ACTION: true
-        run: cd astra
-        run: cargo build --release --target wasm32-unknown-unknown
+        run: cd astra && cargo build --release --target wasm32-unknown-unknown
       - name: Wasm copy and strip
         run: |
           find target/wasm32-unknown-unknown/release \

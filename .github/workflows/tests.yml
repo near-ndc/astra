@@ -21,12 +21,17 @@ jobs:
         env:
           IS_GITHUB_ACTION: true
         run: mkdir res && cd astra && cargo build --release --target wasm32-unknown-unknown
-      - name: Wasm copy
-        run: cp target/wasm32-unknown-unknown/release/astra.wasm res
       - name: Build
         env:
           IS_GITHUB_ACTION: true
         run: cargo +stable build --workspace --target wasm32-unknown-unknown --release
+      - name: Wasm copy
+        run: |
+          cp target/wasm32-unknown-unknown/release/astra.wasm res
+          cp target/wasm32-unknown-unknown/release/astra_factory.wasm res
+          cp target/wasm32-unknown-unknown/release/astra_staking.wasm res
+          cp target/wasm32-unknown-unknown/release/test_token.wasm res
+
       - name: Run Cargo tests
         env:
           IS_GITHUB_ACTION: true

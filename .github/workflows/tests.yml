@@ -28,10 +28,7 @@ jobs:
           IS_GITHUB_ACTION: true
         run: cargo +stable build --workspace --target wasm32-unknown-unknown --release
       - name: Wasm copy
-        run: |
-          cp target/wasm32-unknown-unknown/release/astra_factory.wasm res
-          cp target/wasm32-unknown-unknown/release/astra_staking.wasm res
-          cp target/wasm32-unknown-unknown/release/test_token.wasm res
+        run: cp target/wasm32-unknown-unknown/release/*.wasm res
 
       - name: Run Cargo tests
         env:

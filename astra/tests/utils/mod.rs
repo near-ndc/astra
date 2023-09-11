@@ -26,8 +26,8 @@ pub async fn setup_dao() -> anyhow::Result<(Account, Contract, Worker<Sandbox>)>
             "config": config, "policy": VersionedPolicy::Default(vec![root_near_account])
         }))
         .max_gas()
-        .transact();
-    assert!(res1.await?.is_success());
+        .transact().await?;
+    assert!(res1.is_success(), "{:?}", res1);
     Ok((root, dao_contract, worker))
 }
 
@@ -36,8 +36,8 @@ pub async fn setup_test_token(worker: Worker<Sandbox>) -> anyhow::Result<(Contra
     let res1 = test_token
         .call("new")
         .max_gas()
-        .transact();
-    assert!(res1.await?.is_success());
+        .transact().await?;
+    assert!(res1.is_success(), "{:?}", res1);
 
     Ok((test_token, worker))
 }

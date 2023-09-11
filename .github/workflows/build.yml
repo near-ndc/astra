@@ -81,6 +81,10 @@ jobs:
         with:
           path: target/x86_64-unknown-linux-gnu
           key: ubuntu-latest-stable-cargo-release-target-${{ hashFiles('**/Cargo.toml') }}
+      - name: Build
+        run: mkdir res && cd astra && cargo build --release --target wasm32-unknown-unknown
+      - name: Wasm copy
+        run: cp target/wasm32-unknown-unknown/release/astra.wasm res
       # downloads/installs any extra requirements
       #
       # binaryen, which is used to reduce the contract's size.

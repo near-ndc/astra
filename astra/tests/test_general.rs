@@ -313,6 +313,45 @@ async fn test_bounty_workflow() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn proposal_tests() -> anyhow::Result<()> {
+    let (root, dao, worker) = setup_dao().await?;
+    let user2 = gen_user_account(&worker, user(2).as_str()).await?;
+    let _ = transfer_near(&worker, user2.id(), ONE_NEAR * 900).await?;
+    let user3 = gen_user_account(&worker, user(3).as_str()).await?;
+    let _ = transfer_near(&worker, user3.id(), ONE_NEAR * 900).await?;
+    let user2_near_account: AccountId = user2.id().parse().unwrap();
+    add_member_proposal(root.clone(), &dao, user2_near_account).await?;
+    vote(vec![root.clone()], &dao.clone(), 0).await?;
+
+    let config = Config { name: "astra".to_string(), purpose: "testing".to_string(), metadata: Base64VecU8("".to_string().into()) };
+    let proposal = ProposalInput {
+        description: "rename the dao".to_string(),
+        kind: ProposalKind::ChangeConfig { config: config }
+    };
+    let res = root
+        .call(dao.id(), "add_proposal")
+        .args_json(json!({"proposal": proposal}))
+        .max_gas()
+        .deposit(ONE_NEAR)
+        .transact()
+        .await?;
+    assert!(res.is_success(), "{:?}", res);
+
+    vote(vec![root.clone(), user2.clone()], &dao.clone(), 1).await?;
+
+    let last_prop: u64 = dao.call("get_last_proposal_id").view().await?.json()?;
+    assert_eq!(last_prop, 2);
+
+    let prop: Proposal = dao.call("get_proposal").args_json(json!({"id": 1})).view().await?.json()?;
+    assert_eq!(
+        prop.status,
+        ProposalStatus::Approved
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
     let (root, dao, worker) = setup_dao().await?;
     let user2 = gen_user_account(&worker, user(2).as_str()).await?;
@@ -339,7 +378,6 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
         .transact()
         .await?;
     assert!(res.is_failure(), "{:?}", res);
-    //should_fail(call!(user2, dao.act_proposal(0, Action::VoteApprove, None)));
     let res = root.clone()
         .call(dao.id(), "act_proposal")
         .args_json(json!({"id": 0, "action": Action::VoteApprove}))

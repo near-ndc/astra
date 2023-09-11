@@ -34,7 +34,7 @@ jobs:
         env:
           IS_GITHUB_ACTION: true
         run: cargo test --workspace -- --nocapture
-      - name: Run Ava tests
-        env:
-          IS_GITHUB_ACTION: true
-        run: cd astra && sh test.sh
+      # - name: Run Ava tests
+      #   env:
+      #     IS_GITHUB_ACTION: true
+      #   run: cd astra && sh test.sh

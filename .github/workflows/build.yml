@@ -47,7 +47,7 @@ jobs:
       - name: Install latest stable (for linux-gnu)
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.69.0
           target: x86_64-unknown-linux-gnu
           components: rustfmt, clippy
       # rust compiler for creating binaries

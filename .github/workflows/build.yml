@@ -114,6 +114,10 @@ jobs:
             -name \*.wasm \
             -prune \
             -exec cp {} res \;
+          for f in res/*.wasm
+          do
+            wasm-opt -Oz -o "$f" "$f"
+          done
       - name: Show the wasm files and their sizes
         run: |
           ls -lah res/*.wasm | awk '{print $5 " " $9}'

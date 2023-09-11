@@ -26,7 +26,6 @@ async fn test_large_policy() -> anyhow::Result<()> {
     // initialize contract
     let res1 = factory_contract
         .call("new")
-        .args_json(json!({}))
         .max_gas()
         .transact();
 
@@ -370,7 +369,7 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
     let last_prop: u64 = dao.call("get_last_proposal_id").view().await?.json()?;
     assert_eq!(last_prop, 1);
 
-    // Voting by user who is not member should fail.
+    // Voting by user who is not a member should fail.
     let res = user2.clone()
         .call(dao.id(), "act_proposal")
         .args_json(json!({"id": 0, "action": Action::VoteApprove}))
@@ -385,7 +384,7 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
         .transact()
         .await?;
     assert!(res.is_success(), "{:?}", res);
-    // voting second time should fail.
+    // Voting second time on the same proposal should fail.
     let res = root.clone()
         .call(dao.id(), "act_proposal")
         .args_json(json!({"id": 0, "action": Action::VoteApprove}))

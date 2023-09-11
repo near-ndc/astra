@@ -54,7 +54,7 @@ jobs:
       - name: Install latest stable (for wasm)
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.69.0
           target: wasm32-unknown-unknown
           components: rustfmt, clippy
       # caching (cargo registry)
@@ -81,10 +81,6 @@ jobs:
         with:
           path: target/x86_64-unknown-linux-gnu
           key: ubuntu-latest-stable-cargo-release-target-${{ hashFiles('**/Cargo.toml') }}
-      - name: Build
-        run: mkdir res && cd astra && RUSTFLAGS='-C link-arg=-s' cargo build --target wasm32-unknown-unknown --release
-      - name: Wasm copy
-        run: cp target/wasm32-unknown-unknown/release/astra.wasm res/
       # downloads/installs any extra requirements
       #
       # binaryen, which is used to reduce the contract's size.

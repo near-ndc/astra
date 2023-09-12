@@ -33,12 +33,12 @@ impl Contract {
 
     /// Returns config of this contract.
     pub fn get_config(&self) -> Config {
-        self.config.get().unwrap().clone()
+        self.config.get().unwrap()
     }
 
     /// Returns policy of this contract.
     pub fn get_policy(&self) -> Policy {
-        self.policy.get().unwrap().to_policy().clone()
+        self.policy.get().unwrap().to_policy()
     }
 
     /// Returns staking contract if available. Otherwise returns empty.

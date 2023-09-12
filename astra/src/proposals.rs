@@ -316,13 +316,13 @@ impl Contract {
             }
             ProposalKind::AddMemberToRole { member_id, role } => {
                 let mut new_policy = policy.clone();
-                new_policy.add_member_to_role(role, &member_id.clone().into());
+                new_policy.add_member_to_role(role, &member_id.clone());
                 self.policy.set(&VersionedPolicy::Current(new_policy));
                 PromiseOrValue::Value(())
             }
             ProposalKind::RemoveMemberFromRole { member_id, role } => {
                 let mut new_policy = policy.clone();
-                new_policy.remove_member_from_role(role, &member_id.clone().into());
+                new_policy.remove_member_from_role(role, &member_id.clone());
                 self.policy.set(&VersionedPolicy::Current(new_policy));
                 PromiseOrValue::Value(())
             }
@@ -330,10 +330,10 @@ impl Contract {
                 receiver_id,
                 actions,
             } => {
-                let mut promise = Promise::new(receiver_id.clone().into());
+                let mut promise = Promise::new(receiver_id.clone());
                 for action in actions {
                     promise = promise.function_call(
-                        action.method_name.clone().into(),
+                        action.method_name.clone(),
                         action.args.clone().into(),
                         action.deposit.0,
                         Gas(action.gas.0),
@@ -342,7 +342,7 @@ impl Contract {
                 promise.into()
             }
             ProposalKind::UpgradeSelf { hash } => {
-                upgrade_using_factory(hash.clone());
+                upgrade_using_factory(*hash);
                 PromiseOrValue::Value(())
             }
             ProposalKind::UpgradeRemote {
@@ -350,7 +350,7 @@ impl Contract {
                 method_name,
                 hash,
             } => {
-                upgrade_remote(&receiver_id, method_name, &CryptoHash::from(hash.clone()));
+                upgrade_remote(receiver_id, method_name, &CryptoHash::from(*hash));
                 PromiseOrValue::Value(())
             }
             ProposalKind::Transfer {
@@ -360,14 +360,14 @@ impl Contract {
                 msg,
             } => self.internal_payout(
                 &convert_old_to_new_token(token_id),
-                &receiver_id,
+                receiver_id,
                 amount.0,
                 proposal.description.clone(),
                 msg.clone(),
             ),
             ProposalKind::SetStakingContract { staking_id } => {
                 assert!(self.staking_id.is_none(), "ERR_INVALID_STAKING_CHANGE");
-                self.staking_id = Some(staking_id.clone().into());
+                self.staking_id = Some(staking_id.clone());
                 PromiseOrValue::Value(())
             }
             ProposalKind::AddBounty { bounty } => {
@@ -377,7 +377,7 @@ impl Contract {
             ProposalKind::BountyDone {
                 bounty_id,
                 receiver_id,
-            } => self.internal_execute_bounty_payout(*bounty_id, &receiver_id.clone().into(), true),
+            } => self.internal_execute_bounty_payout(*bounty_id, &receiver_id.clone(), true),
             ProposalKind::Vote => PromiseOrValue::Value(()),
             ProposalKind::FactoryInfoUpdate { factory_info } => {
                 internal_set_factory_info(factory_info);
@@ -417,7 +417,7 @@ impl Contract {
                             proposal_id
                     ))
                 .into(),
-            PromiseOrValue::Value(()) => self.internal_return_bonds(&policy, &proposal).into(),
+            PromiseOrValue::Value(()) => self.internal_return_bonds(policy, proposal).into(),
         }
     }
 
@@ -437,7 +437,7 @@ impl Contract {
             }
         }
         proposal.status = ProposalStatus::Approved;
-        self.internal_return_bonds(&policy, &proposal).into()
+        self.internal_return_bonds(&policy, proposal).into()
     }
 
     pub(crate) fn internal_callback_proposal_fail(
@@ -464,7 +464,7 @@ impl Contract {
                 bounty_id,
                 receiver_id,
             } => {
-                self.internal_execute_bounty_payout(*bounty_id, &receiver_id.clone().into(), false)
+                self.internal_execute_bounty_payout(*bounty_id, &receiver_id.clone(), false)
             }
             _ => PromiseOrValue::Value(()),
         }
@@ -502,7 +502,7 @@ impl Contract {
             },
             ProposalKind::Transfer { token_id, msg, .. } => {
                 assert!(
-                    !(token_id == OLD_BASE_TOKEN) || msg.is_none(),
+                    token_id != OLD_BASE_TOKEN || msg.is_none(),
                     "ERR_BASE_TOKEN_NO_MSG"
                 );
             }
@@ -641,7 +641,7 @@ impl Contract {
             PromiseResult::Failed => self.internal_callback_proposal_fail(&mut proposal),
         };
         self.proposals
-            .insert(&proposal_id, &VersionedProposal::Default(proposal.into()));
+            .insert(&proposal_id, &VersionedProposal::Default(proposal));
         result
     }
 }

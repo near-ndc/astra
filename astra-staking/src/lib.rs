@@ -62,7 +62,7 @@ impl Contract {
     #[init]
     pub fn new(owner_id: AccountId, token_id: AccountId, unstake_period: U64) -> Self {
         Self {
-            owner_id: owner_id.into(),
+            owner_id,
             vote_token_id: token_id,
             users: LookupMap::new(StorageKeys::Users),
             total_amount: 0,
@@ -89,11 +89,11 @@ impl Contract {
     /// If enough tokens and storage, forwards this to owner account.
     pub fn delegate(&mut self, account_id: AccountId, amount: U128) -> Promise {
         let sender_id = env::predecessor_account_id();
-        self.internal_delegate(sender_id, account_id.clone().into(), amount.0);
+        self.internal_delegate(sender_id, account_id.clone(), amount.0);
         ext_astra::ext(self.owner_id.clone())
         .with_static_gas(GAS_FOR_DELEGATE)
         .delegate(
-            account_id.into(),
+            account_id,
             amount
         )
     }
@@ -101,11 +101,11 @@ impl Contract {
     /// Remove given amount of delegation.
     pub fn undelegate(&mut self, account_id: AccountId, amount: U128) -> Promise {
         let sender_id = env::predecessor_account_id();
-        self.internal_undelegate(sender_id, account_id.clone().into(), amount.0);
+        self.internal_undelegate(sender_id, account_id.clone(), amount.0);
         ext_astra::ext(self.owner_id.clone())
         .with_static_gas(GAS_FOR_UNDELEGATE)
         .undelegate(
-            account_id.into(),
+            account_id,
             amount
         )
     }
@@ -198,7 +198,7 @@ mod tests {
         testing_env!(context.attached_deposit(parse_near!("1 N")).build());
         contract.storage_deposit(Some(delegate_from_user.clone()), None);
 
-        testing_env!(context.predecessor_account_id(voting_token.clone()).build());
+        testing_env!(context.predecessor_account_id(voting_token).build());
         contract.ft_on_transfer(
             delegate_from_user.clone(),
             U128(parse_near!("100")),

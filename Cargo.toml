@@ -1,9 +1,9 @@
 [workspace]
 members = [
-  "astra-staking",
   "astra",
+  "test-token",
   "astra-factory",
-  "test-token"
+  "astra-staking",
 ]
 
 [workspace.package]

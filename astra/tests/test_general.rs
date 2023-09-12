@@ -72,7 +72,7 @@ async fn test_large_policy() -> anyhow::Result<()> {
     let res2 = factory_contract
         .call("create")
         .args_json((AccountId::new_unchecked("testdao".to_string()), Base64VecU8(params)))
-        .gas(300_000_000_000_000)
+        .max_gas()
         .deposit(ONE_NEAR * 10)
         .transact()
         .await?;
@@ -137,7 +137,7 @@ async fn test_multi_council() -> anyhow::Result<()> {
     };
     let res2 = root.call(dao_contract.id(), "add_proposal")
         .args_json(json!({"proposal": proposal}))
-        .gas(300_000_000_000_000)
+        .max_gas()
         .deposit(ONE_NEAR)
         .transact()
         .await?;
@@ -530,7 +530,7 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
         .transact()
         .await?;
     assert!(res.is_success(), "{:?}", res);
-    // should fail right after undelegation as need to wait for voting period before can delegate again.
+    // should fail right after undelegation as user needs to wait for voting period before they can delegate again.
     let res = user2
         .call(staking.id(), "delegate")
         .args_json(json!({"account_id": user2.id(), "amount": U128(ONE_NEAR)}))

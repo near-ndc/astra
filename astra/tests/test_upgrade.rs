@@ -1,6 +1,8 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use std::str::FromStr;
 
+use crate::utils::*;
+mod utils;
 use workspaces::{AccountId as WorkAccountId};
 use astra::{Config, VersionedPolicy, ProposalInput, ProposalKind, Action};
 use near_sdk::{serde_json::json, json_types::{Base64VecU8, Base58CryptoHash}, AccountId, ONE_NEAR};
@@ -88,47 +90,76 @@ struct NewArgs {
 }
 
 // /// Test that astra can upgrade another contract.
-// #[tokio::test]
-// async fn test_upgrade_other() -> anyhow::Result<()> {
-//     let (root, dao) = setup_dao();
-//     let ref_account_id: AccountId = "ref-finance".parse().unwrap();
-//     let _ = root.deploy_and_init(
-//         &OTHER_WASM_BYTES,
-//         ref_account_id.clone(),
-//         "new",
-//         &json!({
-//             "owner_id": dao.account_id(),
-//             "exchange_fee": 1,
-//             "referral_fee": 1,
-//         })
-//         .to_string()
-//         .into_bytes(),
-//         to_yocto("1000"),
-//         DEFAULT_GAS,
-//     );
-//     let hash = root
-//         .call(
-//             dao.user_account.account_id.clone(),
-//             "store_blob",
-//             &OTHER_WASM_BYTES,
-//             near_sdk_sim::DEFAULT_GAS,
-//             to_yocto("200"),
-//         )
-//         .unwrap_json::<Base58CryptoHash>();
-//     add_proposal(
-//         &root,
-//         &dao,
-//         ProposalInput {
-//             description: "test".to_string(),
-//             kind: ProposalKind::UpgradeRemote {
-//                 receiver_id: ref_account_id.clone(),
-//                 method_name: "upgrade".to_string(),
-//                 hash,
-//             },
-//         },
-//     )
-//     .assert_success();
-//     call!(root, dao.act_proposal(0, Action::VoteApprove, None)).assert_success();
+#[tokio::test]
+async fn test_upgrade_other() -> anyhow::Result<()> {
+    let (root, dao, worker) = setup_dao().await?;
+    // let ref_account_id: AccountId = "ref-finance".parse().unwrap();
+    // let _ = root.deploy_and_init(
+    //     &OTHER_WASM_BYTES,
+    //     ref_account_id.clone(),
+    //     "new",
+    //     &json!({
+    //         "owner_id": dao.account_id(),
+    //         "exchange_fee": 1,
+    //         "referral_fee": 1,
+    //     })
+    //     .to_string()
+    //     .into_bytes(),
+    //     to_yocto("1000"),
+    //     DEFAULT_GAS,
+    // );
+    let (other_contract, _) = setup_test_token(worker).await?;
 
-//     Ok(())
-// }
+    let res = root
+        .call(dao.id(), "store_blob")
+        .args(include_bytes!("../../res/test_token.wasm").to_vec())
+        .max_gas()
+        .deposit(ONE_NEAR * 200)
+        .transact()
+        .await?;
+    assert!(res.is_success(), "{:?}", res);
+    let hash: Base58CryptoHash = res.json()?; 
+    // let hash = root
+    //     .call(
+    //         dao.user_account.account_id.clone(),
+    //         "store_blob",
+    //         &OTHER_WASM_BYTES,
+    //         near_sdk_sim::DEFAULT_GAS,
+    //         to_yocto("200"),
+    //     )
+    //     .unwrap_json::<Base58CryptoHash>();
+    let proposal = ProposalInput {
+        description: "test".to_string(),
+        kind: ProposalKind::UpgradeRemote {
+            receiver_id: other_contract.id().clone().parse().unwrap(),
+            method_name: "upgrade".to_string(),
+            hash,
+        },
+    };
+    let res = root
+        .call(dao.id(), "add_proposal")
+        .args_json(json!({"proposal": proposal}))
+        .max_gas()
+        .deposit(ONE_NEAR)
+        .transact()
+        .await?;
+    assert!(res.is_success(), "{:?}", res);
+
+    // add_proposal(
+    //     &root,
+    //     &dao,
+    //     ProposalInput {
+    //         description: "test".to_string(),
+    //         kind: ProposalKind::UpgradeRemote {
+    //             receiver_id: ref_account_id.clone(),
+    //             method_name: "upgrade".to_string(),
+    //             hash,
+    //         },
+    //     },
+    // )
+    // .assert_success();
+    //call!(root, dao.act_proposal(0, Action::VoteApprove, None)).assert_success();
+    vote(vec![root], &dao, 0).await?;
+
+    Ok(())
+}

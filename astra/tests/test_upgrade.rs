@@ -93,21 +93,7 @@ struct NewArgs {
 #[tokio::test]
 async fn test_upgrade_other() -> anyhow::Result<()> {
     let (root, dao, worker) = setup_dao().await?;
-    // let ref_account_id: AccountId = "ref-finance".parse().unwrap();
-    // let _ = root.deploy_and_init(
-    //     &OTHER_WASM_BYTES,
-    //     ref_account_id.clone(),
-    //     "new",
-    //     &json!({
-    //         "owner_id": dao.account_id(),
-    //         "exchange_fee": 1,
-    //         "referral_fee": 1,
-    //     })
-    //     .to_string()
-    //     .into_bytes(),
-    //     to_yocto("1000"),
-    //     DEFAULT_GAS,
-    // );
+    let _ = transfer_near(&worker, root.id(), ONE_NEAR * 1000).await?;
     let (other_contract, _) = setup_test_token(worker).await?;
 
     let res = root
@@ -119,15 +105,7 @@ async fn test_upgrade_other() -> anyhow::Result<()> {
         .await?;
     assert!(res.is_success(), "{:?}", res);
     let hash: Base58CryptoHash = res.json()?; 
-    // let hash = root
-    //     .call(
-    //         dao.user_account.account_id.clone(),
-    //         "store_blob",
-    //         &OTHER_WASM_BYTES,
-    //         near_sdk_sim::DEFAULT_GAS,
-    //         to_yocto("200"),
-    //     )
-    //     .unwrap_json::<Base58CryptoHash>();
+
     let proposal = ProposalInput {
         description: "test".to_string(),
         kind: ProposalKind::UpgradeRemote {
@@ -145,20 +123,6 @@ async fn test_upgrade_other() -> anyhow::Result<()> {
         .await?;
     assert!(res.is_success(), "{:?}", res);
 
-    // add_proposal(
-    //     &root,
-    //     &dao,
-    //     ProposalInput {
-    //         description: "test".to_string(),
-    //         kind: ProposalKind::UpgradeRemote {
-    //             receiver_id: ref_account_id.clone(),
-    //             method_name: "upgrade".to_string(),
-    //             hash,
-    //         },
-    //     },
-    // )
-    // .assert_success();
-    //call!(root, dao.act_proposal(0, Action::VoteApprove, None)).assert_success();
     vote(vec![root], &dao, 0).await?;
 
     Ok(())

@@ -325,7 +325,7 @@ async fn proposal_tests() -> anyhow::Result<()> {
     let config = Config { name: "astra".to_string(), purpose: "testing".to_string(), metadata: Base64VecU8("".to_string().into()) };
     let proposal = ProposalInput {
         description: "rename the dao".to_string(),
-        kind: ProposalKind::ChangeConfig { config: config }
+        kind: ProposalKind::ChangeConfig { config }
     };
     let res = root
         .call(dao.id(), "add_proposal")

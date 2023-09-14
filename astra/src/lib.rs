@@ -35,6 +35,7 @@ pub enum StorageKeys {
     BountyClaimers,
     BountyClaimCounts,
     Blobs,
+    AllowedHooks,
 }
 
 /// After payouts, allows a callback
@@ -78,6 +79,9 @@ pub struct Contract {
 
     /// Large blob storage.
     pub blobs: LookupMap<CryptoHash, AccountId>,
+
+    /// map of the hook name --> list of accounts authorized to execute a hook.
+    pub allowed_hooks: LookupMap<String, Vec<AccountId>>
 }
 
 #[near_bindgen]
@@ -98,6 +102,7 @@ impl Contract {
             bounty_claims_count: LookupMap::new(StorageKeys::BountyClaimCounts),
             blobs: LookupMap::new(StorageKeys::Blobs),
             locked_amount: 0,
+            allowed_hooks: LookupMap::new(StorageKeys::AllowedHooks),
         };
         internal_set_factory_info(&FactoryInfo {
             factory_id: env::predecessor_account_id(),
@@ -136,6 +141,30 @@ impl Contract {
     /// Returns factory information, including if auto update is allowed.
     pub fn get_factory_info(&self) -> FactoryInfo {
         internal_get_factory_info()
+    }
+
+    /// payload are base64 encoded bytes, and the hook function can deserialize it 
+    /// into a destination structure if the complex object is expected.
+    pub fn execute_hook(&mut self, hook: String, payload: String) -> bool {
+        let authorities = match self.allowed_hooks.get(&hook) {
+            None => panic!("unknown hook"),
+            Some(a) => a
+        };
+        if !authorities.contains(&env::predecessor_account_id()) {
+            panic!("not authorized")
+        }
+        // match hook {
+        //     "veto" => self._veto_hook(payload);
+        //     "dissolve" => self._veto_hook
+        // }
+        true
+    }
+    
+    pub(crate) fn _veto_hook(self, payload: String) {
+    // 1. payload must be a u64 number serialized using base64 (eg "10"). 
+    // 2. Deserialize payload into number
+    // 3. Check if the proposal exist and is not finalized
+    // 4. Remove proposal (or set it's state to Vetoed).
     }
 }
 

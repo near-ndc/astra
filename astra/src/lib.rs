@@ -1,11 +1,14 @@
+use std::error::Error;
+
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap};
 use near_sdk::json_types::{Base58CryptoHash, U128};
-use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::serde::{self, Deserialize, Serialize};
 use near_sdk::{
     env, ext_contract, near_bindgen, AccountId, Balance, BorshStorageKey, CryptoHash,
     PanicOnDefault, Promise, PromiseResult, PromiseOrValue,
 };
+use near_sdk::base64;
 
 pub use crate::bounties::{Bounty, BountyClaim, VersionedBounty};
 pub use crate::policy::{
@@ -87,7 +90,11 @@ pub struct Contract {
 #[near_bindgen]
 impl Contract {
     #[init]
-    pub fn new(config: Config, policy: VersionedPolicy) -> Self {
+    pub fn new(config: Config, policy: VersionedPolicy, allowed_hooks: Vec<(String, Vec<AccountId>)>) -> Self {
+        let mut allowed: LookupMap<String, Vec<AccountId>> = LookupMap::new(StorageKeys::AllowedHooks);
+        for hook in allowed_hooks.iter() {
+            allowed.insert(&hook.0,&hook.1);
+        }
         let this = Self {
             config: LazyOption::new(StorageKeys::Config, Some(&config)),
             policy: LazyOption::new(StorageKeys::Policy, Some(&policy.upgrade())),
@@ -102,7 +109,7 @@ impl Contract {
             bounty_claims_count: LookupMap::new(StorageKeys::BountyClaimCounts),
             blobs: LookupMap::new(StorageKeys::Blobs),
             locked_amount: 0,
-            allowed_hooks: LookupMap::new(StorageKeys::AllowedHooks),
+            allowed_hooks: allowed,
         };
         internal_set_factory_info(&FactoryInfo {
             factory_id: env::predecessor_account_id(),
@@ -143,10 +150,8 @@ impl Contract {
         internal_get_factory_info()
     }
 
-    /// payload are base64 encoded bytes, and the hook function can deserialize it 
-    /// into a destination structure if the complex object is expected.
-    pub fn execute_hook(&mut self, hook: String, payload: String) -> bool {
-        let authorities = match self.allowed_hooks.get(&hook) {
+    pub fn veto_hook(&self, id: u64) -> bool {
+        let authorities = match self.allowed_hooks.get(&"veto".to_string()) {
             None => panic!("unknown hook"),
             Some(a) => a
         };
@@ -154,22 +159,25 @@ impl Contract {
         if !authorities.contains(&env::predecessor_account_id()) {
             panic!("not authorized")
         }
-        match hook.as_str() {
-            "veto" => self._veto_hook(payload),
-            "dissolve" => self._dissolve_hook(payload),
-            _ => panic!("unknown operation")
-        }
+        
+        
         true
-    }
-
-    pub(crate) fn _veto_hook(&self, payload: String) {
         // 1. payload must be a u64 number serialized using base64 (eg "10"). 
         // 2. Deserialize payload into number
         // 3. Check if the proposal exist and is not finalized
         // 4. Remove proposal (or set it's state to Vetoed).
     }
 
-    pub(crate) fn _dissolve_hook(&self, payload: String) {
+    pub fn dissolve_hook(&self) -> bool {
+        let authorities = match self.allowed_hooks.get(&"dissolve".to_string()) {
+            None => panic!("unknown hook"),
+            Some(a) => a
+        };
+        // dissolve hook must be called by authorized contract (Voting Body)
+        if !authorities.contains(&env::predecessor_account_id()) {
+            panic!("not authorized")
+        }
+        true
         // 1. Lock the whole DAO
         // 2. Remove all the members
         // 3. Freeze all operations

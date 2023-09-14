@@ -150,22 +150,31 @@ impl Contract {
             None => panic!("unknown hook"),
             Some(a) => a
         };
+        // dissolve hook must be called by authorized contract (Voting Body)
         if !authorities.contains(&env::predecessor_account_id()) {
             panic!("not authorized")
         }
-        // match hook {
-        //     "veto" => self._veto_hook(payload);
-        //     "dissolve" => self._veto_hook
-        // }
+        match hook.as_str() {
+            "veto" => self._veto_hook(payload),
+            "dissolve" => self._dissolve_hook(payload),
+            _ => panic!("unknown operation")
+        }
         true
     }
-    
-    pub(crate) fn _veto_hook(self, payload: String) {
-    // 1. payload must be a u64 number serialized using base64 (eg "10"). 
-    // 2. Deserialize payload into number
-    // 3. Check if the proposal exist and is not finalized
-    // 4. Remove proposal (or set it's state to Vetoed).
+
+    pub(crate) fn _veto_hook(&self, payload: String) {
+        // 1. payload must be a u64 number serialized using base64 (eg "10"). 
+        // 2. Deserialize payload into number
+        // 3. Check if the proposal exist and is not finalized
+        // 4. Remove proposal (or set it's state to Vetoed).
     }
+
+    pub(crate) fn _dissolve_hook(&self, payload: String) {
+        // 1. Lock the whole DAO
+        // 2. Remove all the members
+        // 3. Freeze all operations
+        // 4. Transfer all the funds to a trust address or add a function to claim funds. 1st is good
+     }
 }
 
 /// Stores attached data into blob store and returns hash of it.

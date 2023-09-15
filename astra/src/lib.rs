@@ -162,13 +162,11 @@ impl Contract {
 
         // Check if the proposal exist and is not finalized
         let proposal: Proposal = self.proposals.get(&id).expect("Proposal doesn't exist").into();
-        // TODO: Add proposal cooldown period
-        let policy = self.policy.get().unwrap().to_policy();
-        if proposal.submission_time.0 + policy.proposal_period.0 < env::block_timestamp() {
-            // Proposal expired.
-            panic!("proposal expired")
-        };
-        self.proposals.remove(&id);
+        if proposal.status == ProposalStatus::InProgress || proposal.status == ProposalStatus::Failed {
+            self.proposals.remove(&id);
+        } else {
+            panic!("proposal finalized")
+        }
     }
 
     /// Dissolve proposal hook

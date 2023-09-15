@@ -1,14 +1,11 @@
-use std::error::Error;
-
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap};
 use near_sdk::json_types::{Base58CryptoHash, U128};
-use near_sdk::serde::{self, Deserialize, Serialize};
+use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, ext_contract, near_bindgen, AccountId, Balance, BorshStorageKey, CryptoHash,
     PanicOnDefault, Promise, PromiseResult, PromiseOrValue,
 };
-use near_sdk::base64;
 
 pub use crate::bounties::{Bounty, BountyClaim, VersionedBounty};
 pub use crate::policy::{
@@ -150,24 +147,29 @@ impl Contract {
         internal_get_factory_info()
     }
 
-    pub fn veto_hook(&self, id: u64) -> bool {
-        let authorities = match self.allowed_hooks.get(&"veto".to_string()) {
-            None => panic!("unknown hook"),
-            Some(a) => a
-        };
-        // dissolve hook must be called by authorized contract (Voting Body)
+    /// Veto proposal hook
+    /// Check for authorities and remove proposal
+    /// * `id`: proposal id
+    pub fn veto_hook(&mut self, id: u64) {
+        let authorities = self.allowed_hooks.get(&"veto".to_string()).expect("Not allowed");
         if !authorities.contains(&env::predecessor_account_id()) {
             panic!("not authorized")
         }
-        
-        
-        true
-        // 1. payload must be a u64 number serialized using base64 (eg "10"). 
-        // 2. Deserialize payload into number
-        // 3. Check if the proposal exist and is not finalized
-        // 4. Remove proposal (or set it's state to Vetoed).
+
+        // Check if the proposal exist and is not finalized
+        let proposal: Proposal = self.proposals.get(&id).expect("Proposal doesn't exist").into();
+        // TODO: Add proposal cooldown period
+        let policy = self.policy.get().unwrap().to_policy();
+        if proposal.submission_time.0 + policy.proposal_period.0 < env::block_timestamp() {
+            // Proposal expired.
+            panic!("proposal expired")
+        };
+        self.proposals.remove(&id);
     }
 
+    /// Dissolve proposal hook
+    /// Check for authorities and remove all the members
+    /// Transfer funds to trust
     pub fn dissolve_hook(&self) -> bool {
         let authorities = match self.allowed_hooks.get(&"dissolve".to_string()) {
             None => panic!("unknown hook"),
@@ -177,6 +179,14 @@ impl Contract {
         if !authorities.contains(&env::predecessor_account_id()) {
             panic!("not authorized")
         }
+
+        // All the members are removed so operations are in freeze state
+        let mut policy = self.policy.get().unwrap().to_policy();
+        while !policy.roles.is_empty() {
+            policy.roles.pop();
+        }
+
+
         true
         // 1. Lock the whole DAO
         // 2. Remove all the members
@@ -247,6 +257,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
+            vec![]
         );
         let id = create_proposal(&mut context, &mut contract);
         assert_eq!(contract.get_proposal(id).proposal.description, "test");
@@ -292,6 +303,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
+            vec![]
         );
         let id = create_proposal(&mut context, &mut contract);
         assert_eq!(contract.get_proposal(id).proposal.description, "test");
@@ -306,7 +318,7 @@ mod tests {
         policy.to_policy_mut().roles[1]
             .permissions
             .insert("*:RemoveProposal".to_string());
-        let mut contract = Contract::new(Config::test_config(), policy);
+        let mut contract = Contract::new(Config::test_config(), policy, vec![]);
         let id = create_proposal(&mut context, &mut contract);
         assert_eq!(contract.get_proposal(id).proposal.description, "test");
         contract.act_proposal(id, Action::RemoveProposal, None);
@@ -320,6 +332,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
+            vec![]
         );
         let id = create_proposal(&mut context, &mut contract);
         testing_env!(context
@@ -336,6 +349,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1), accounts(2)]),
+            vec![]
         );
         let id = create_proposal(&mut context, &mut contract);
         contract.act_proposal(id, Action::VoteApprove, None);
@@ -349,6 +363,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
+            vec![]
         );
         testing_env!(context.attached_deposit(parse_near!("1 N")).build());
         let id = contract.add_proposal(ProposalInput {
@@ -372,6 +387,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
+            vec![]
         );
         testing_env!(context.attached_deposit(parse_near!("1 N")).build());
         let _id = contract.add_proposal(ProposalInput {

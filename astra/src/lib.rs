@@ -81,13 +81,16 @@ pub struct Contract {
     pub blobs: LookupMap<CryptoHash, AccountId>,
 
     /// map of the hook name --> list of accounts authorized to execute a hook.
-    pub allowed_hooks: LookupMap<String, Vec<AccountId>>
+    pub allowed_hooks: LookupMap<String, Vec<AccountId>>,
+
+    /// Trust address
+    pub trust: AccountId,
 }
 
 #[near_bindgen]
 impl Contract {
     #[init]
-    pub fn new(config: Config, policy: VersionedPolicy, allowed_hooks: Vec<(String, Vec<AccountId>)>) -> Self {
+    pub fn new(config: Config, policy: VersionedPolicy, allowed_hooks: Vec<(String, Vec<AccountId>)>, trust: AccountId) -> Self {
         let mut allowed: LookupMap<String, Vec<AccountId>> = LookupMap::new(StorageKeys::AllowedHooks);
         for hook in allowed_hooks.iter() {
             allowed.insert(&hook.0,&hook.1);
@@ -107,6 +110,7 @@ impl Contract {
             blobs: LookupMap::new(StorageKeys::Blobs),
             locked_amount: 0,
             allowed_hooks: allowed,
+            trust,
         };
         internal_set_factory_info(&FactoryInfo {
             factory_id: env::predecessor_account_id(),
@@ -170,7 +174,7 @@ impl Contract {
     /// Dissolve proposal hook
     /// Check for authorities and remove all the members
     /// Transfer funds to trust
-    pub fn dissolve_hook(&self) -> bool {
+    pub fn dissolve_hook(&self) {
         let authorities = match self.allowed_hooks.get(&"dissolve".to_string()) {
             None => panic!("unknown hook"),
             Some(a) => a
@@ -186,12 +190,9 @@ impl Contract {
             policy.roles.pop();
         }
 
-
-        true
-        // 1. Lock the whole DAO
-        // 2. Remove all the members
-        // 3. Freeze all operations
-        // 4. Transfer all the funds to a trust address or add a function to claim funds. 1st is good
+        // TODO: Check what to do with bond amount
+        let funds = env::account_balance() - self.locked_amount;
+        Promise::new(self.trust.clone()).transfer(funds);
      }
 }
 
@@ -257,7 +258,8 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
-            vec![]
+            vec![],
+            accounts(1)
         );
         let id = create_proposal(&mut context, &mut contract);
         assert_eq!(contract.get_proposal(id).proposal.description, "test");
@@ -303,7 +305,8 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
-            vec![]
+            vec![],
+            accounts(1)
         );
         let id = create_proposal(&mut context, &mut contract);
         assert_eq!(contract.get_proposal(id).proposal.description, "test");
@@ -318,7 +321,7 @@ mod tests {
         policy.to_policy_mut().roles[1]
             .permissions
             .insert("*:RemoveProposal".to_string());
-        let mut contract = Contract::new(Config::test_config(), policy, vec![]);
+        let mut contract = Contract::new(Config::test_config(), policy, vec![], accounts(1));
         let id = create_proposal(&mut context, &mut contract);
         assert_eq!(contract.get_proposal(id).proposal.description, "test");
         contract.act_proposal(id, Action::RemoveProposal, None);
@@ -332,7 +335,8 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
-            vec![]
+            vec![],
+            accounts(1)
         );
         let id = create_proposal(&mut context, &mut contract);
         testing_env!(context
@@ -349,7 +353,8 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1), accounts(2)]),
-            vec![]
+            vec![],
+            accounts(1)
         );
         let id = create_proposal(&mut context, &mut contract);
         contract.act_proposal(id, Action::VoteApprove, None);
@@ -363,7 +368,8 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
-            vec![]
+            vec![],
+            accounts(1)
         );
         testing_env!(context.attached_deposit(parse_near!("1 N")).build());
         let id = contract.add_proposal(ProposalInput {
@@ -387,7 +393,8 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
-            vec![]
+            vec![],
+            accounts(1)
         );
         testing_env!(context.attached_deposit(parse_near!("1 N")).build());
         let _id = contract.add_proposal(ProposalInput {

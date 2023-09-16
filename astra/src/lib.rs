@@ -173,10 +173,7 @@ impl Contract {
     /// Check for authorities and remove all the members
     /// Transfer funds to trust
     pub fn dissolve_hook(&self) {
-        let authorities = match self.allowed_hooks.get(&"dissolve".to_string()) {
-            None => panic!("unknown hook"),
-            Some(a) => a
-        };
+        let authorities = self.allowed_hooks.get("dissolve".to_string()).or_default();
         // dissolve hook must be called by authorized contract (Voting Body)
         if !authorities.contains(&env::predecessor_account_id()) {
             panic!("not authorized")

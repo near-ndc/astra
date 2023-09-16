@@ -155,7 +155,7 @@ impl Contract {
     /// Check for authorities and remove proposal
     /// * `id`: proposal id
     pub fn veto_hook(&mut self, id: u64) {
-        let authorities = self.allowed_hooks.get(&"veto".to_string()).expect("Not allowed");
+        let authorities = self.allowed_hooks.get(&"veto".to_string()).unwrap_or_default();
         if !authorities.contains(&env::predecessor_account_id()) {
             panic!("not authorized")
         }
@@ -172,8 +172,8 @@ impl Contract {
     /// Dissolve proposal hook
     /// Check for authorities and remove all the members
     /// Transfer funds to trust
-    pub fn dissolve_hook(&self) {
-        let authorities = self.allowed_hooks.get("dissolve".to_string()).or_default();
+    pub fn dissolve_hook(&mut self) {
+        let authorities = self.allowed_hooks.get(&"dissolve".to_string()).unwrap_or_default();
         // dissolve hook must be called by authorized contract (Voting Body)
         if !authorities.contains(&env::predecessor_account_id()) {
             panic!("not authorized")
@@ -181,11 +181,17 @@ impl Contract {
 
         // All the members are removed so operations are in freeze state
         let mut policy = self.policy.get().unwrap().to_policy();
-        while !policy.roles.is_empty() {
-            policy.roles.pop();
+        // Return bond amounts
+        for prop_id in 0..self.last_proposal_id {
+            let prop: Proposal = self.proposals.get(&prop_id).unwrap().into();
+            if prop.status == ProposalStatus::InProgress {
+                self.internal_return_bonds(&policy, &prop);
+            }
         }
 
-        // TODO: Check what to do with bond amount
+        policy.roles = vec![];
+        self.policy.set(&VersionedPolicy::Current(policy));
+
         let funds = env::account_balance() - self.locked_amount;
         Promise::new(self.trust.clone()).transfer(funds);
      }
@@ -226,7 +232,7 @@ pub extern "C" fn store_blob() {
 #[cfg(test)]
 mod tests {
     use near_sdk::test_utils::{accounts, VMContextBuilder};
-    use near_sdk::testing_env;
+    use near_sdk::{testing_env, VMContext};
     use near_units::parse_near;
 
     use crate::proposals::ProposalStatus;
@@ -245,6 +251,19 @@ mod tests {
             },
         })
     }
+
+    fn setup_hook_proposal() -> (VMContext, Contract, u64) {
+        let mut context = VMContextBuilder::new();
+        testing_env!(context.predecessor_account_id(accounts(1)).build());
+        let mut contract = Contract::new(
+            Config::test_config(),
+            VersionedPolicy::Default(vec![accounts(1)]),
+            vec![("veto".to_string(), vec![accounts(2)]), ("dissolve".to_string(), vec![accounts(2)])],
+            accounts(1)
+        );
+        let id = create_proposal(&mut context, &mut contract);
+        (context.build(), contract, id)
+    } 
 
     #[test]
     fn test_basics() {
@@ -398,5 +417,55 @@ mod tests {
                 policy: VersionedPolicy::Default(vec![]),
             },
         });
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_NO_PROPOSAL")]
+    fn test_veto_hook() {
+        let (mut context, mut contract, id)= setup_hook_proposal();
+        assert_eq!(contract.get_proposal(id).id, id);
+
+        context.predecessor_account_id = accounts(2);
+        testing_env!(context);
+        contract.veto_hook(id);
+
+        contract.get_proposal(id);
+    }
+
+    #[test]
+    #[should_panic(expected = "not authorized")]
+    fn test_veto_hook_unauthorised() {
+        let (_, mut contract, id)= setup_hook_proposal();
+        assert_eq!(contract.get_proposal(id).id, id);
+        contract.veto_hook(id);
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_PERMISSION_DENIED")]
+    fn test_dissolve_hook() {
+        let (mut context, mut contract, id)= setup_hook_proposal();
+        assert_eq!(contract.get_proposal(id).id, id);
+
+        let mut res = contract.policy.get().unwrap().to_policy();
+        assert_eq!(res.roles.is_empty(), false);
+
+        context.predecessor_account_id = accounts(2);
+        testing_env!(context.clone());
+        contract.dissolve_hook();
+        res = contract.policy.get().unwrap().to_policy();
+        assert_eq!(res.roles.is_empty(), true);
+
+        context.predecessor_account_id = accounts(1);
+        context.attached_deposit = parse_near!("1 N");
+        testing_env!(context);
+
+        contract.add_proposal(ProposalInput {
+            description: "test".to_string(),
+            kind: ProposalKind::AddMemberToRole {
+                member_id: accounts(2),
+                role: "missing".to_string(),
+            },
+        });
+
     }
 }

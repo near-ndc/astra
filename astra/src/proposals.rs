@@ -285,7 +285,7 @@ impl Contract {
         }
     }
 
-    fn internal_return_bonds(&mut self, policy: &Policy, proposal: &Proposal) -> Promise {
+    pub(crate) fn internal_return_bonds(&mut self, policy: &Policy, proposal: &Proposal) -> Promise {
         match &proposal.kind {
             ProposalKind::BountyDone { .. } => {
                 self.locked_amount -= policy.bounty_bond.0;

@@ -465,6 +465,5 @@ mod tests {
                 role: "missing".to_string(),
             },
         });
-
     }
 }

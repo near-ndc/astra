@@ -240,7 +240,6 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
-            vec![],
             accounts(1)
         );
         add_bounty(&mut context, &mut contract, 2);
@@ -305,7 +304,6 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
-            vec![],
             accounts(1)
         );
         let id = add_bounty(&mut context, &mut contract, 1);

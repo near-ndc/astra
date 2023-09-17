@@ -19,6 +19,9 @@ pub enum RoleKind {
     Member(U128),
     /// Set of accounts.
     Group(HashSet<AccountId>),
+    /// House accounts
+    /// Note: Hook for houses will only work if change policy is disabled.
+    House(HashSet<AccountId>),
 }
 
 impl RoleKind {
@@ -28,6 +31,7 @@ impl RoleKind {
             RoleKind::Everyone => true,
             RoleKind::Member(amount) => user.amount >= amount.0,
             RoleKind::Group(accounts) => accounts.contains(&user.account_id),
+            RoleKind::House(accounts) => accounts.contains(&user.account_id),
         }
     }
 
@@ -410,6 +414,8 @@ impl Policy {
                     }
                 }
                 RoleKind::Member(_) => total_supply,
+                // Skip house
+                RoleKind::House(_) => continue,
             };
             let threshold = std::cmp::max(
                 vote_policy.quorum.0,

@@ -18,14 +18,13 @@ pub async fn setup_dao() -> anyhow::Result<(Account, Contract, Worker<Sandbox>)>
         purpose: "to test".to_string(),
         metadata: Base64VecU8(vec![]),
     };
-    let allowed_hooks: Vec<(String, Vec<AccountId>)> = vec![];
     // initialize contract
     let root_near_account: AccountId = root.id().parse().unwrap();
     let res1 = dao_contract
         .call("new")
         .args_json(json!({
             "config": config, "policy": VersionedPolicy::Default(vec![root_near_account.clone()]),
-            "allowed_hooks": allowed_hooks, "trust": root_near_account
+            "trust": root_near_account
         }))
         .max_gas()
         .transact().await?;

@@ -36,7 +36,6 @@ async fn test_large_policy() -> anyhow::Result<()> {
         purpose: "to test".to_string(),
         metadata: Base64VecU8(vec![]),
     };
-    let allowed_hooks: Vec<(String, Vec<AccountId>)> = vec![];
     let root_near_account: AccountId = root.id().parse().unwrap();
     let mut policy = default_policy(vec![root_near_account.clone()]);
     const NO_OF_COUNCILS: u32 = 10;
@@ -66,7 +65,7 @@ async fn test_large_policy() -> anyhow::Result<()> {
         policy.add_or_update_role(&role);
     }
 
-    let params = json!({ "config": config, "policy": policy, "allowed_hooks": allowed_hooks, "trust": root_near_account})
+    let params = json!({ "config": config, "policy": policy, "trust": root_near_account})
         .to_string()
         .into_bytes();
 

@@ -36,7 +36,6 @@ pub enum StorageKeys {
     BountyClaimers,
     BountyClaimCounts,
     Blobs,
-    AllowedHooks,
 }
 
 /// After payouts, allows a callback

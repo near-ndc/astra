@@ -235,7 +235,7 @@ near view $ASTRA_ID get_policy
 - `VoteRemove` - _Votes to remove given proposal or bounty (this may be because the proposal is spam or otherwise invalid)._
 - `Finalize` - _Finalizes proposal which is cancelled when proposal has expired (this action also returns funds)._
 - `MoveToHub` - _Moves a proposal to the hub (this is used to move a proposal into another DAO)._
-
+- `ExecuteProposal` - Execute a proposal if it was not executed in final voting.
 ---
 
 ## Proposals

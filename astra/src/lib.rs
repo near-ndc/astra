@@ -151,11 +151,11 @@ impl Contract {
         if let Some(pol) = self.policy.get() {
             let policy = pol.to_policy();
             let res = 
-            policy.can_execute_action(UserInfo {
+            policy.can_execute_hook(UserInfo {
                 amount: 0u128,
                 account_id: env::predecessor_account_id(),
-            }, &ProposalKind::VetoProposal{}, &Action::VetoProposal);
-            assert!(res.1, "not authorized");
+            }, &Action::VetoProposal);
+            assert!(res, "not authorized");
         } else {
             panic!("policy not found!")
         }
@@ -187,11 +187,11 @@ impl Contract {
         if let Some(pol) = self.policy.get() {
             policy = pol.to_policy();
             let res = 
-            policy.can_execute_action(UserInfo {
+            policy.can_execute_hook(UserInfo {
                 amount: 0u128,
                 account_id: env::predecessor_account_id(),
-            }, &ProposalKind::Dissolve{}, &Action::Dissolve);
-            assert!(res.1, "not authorized");
+            }, &Action::Dissolve);
+            assert!(res, "not authorized");
         } else {
             panic!("policy not found!")
         }
@@ -324,9 +324,9 @@ mod tests {
                 },
                 RolePermission {
                     name: "CoA".to_string(),
-                    kind: RoleKind::House(vec![council_of_advisors()].into_iter().collect()),
+                    kind: RoleKind::Group(vec![council_of_advisors()].into_iter().collect()),
                     permissions: vec![
-                        "*:VetoProposal".to_string(),
+                        "VetoProposal".to_string(),
                     ]
                     .into_iter()
                     .collect(),
@@ -334,8 +334,8 @@ mod tests {
                 },
                 RolePermission {
                     name: "VotingBody".to_string(),
-                    kind: RoleKind::House(vec![acc_voting_body()].into_iter().collect()),
-                    permissions: vec!["*:Dissolve".to_string(),]
+                    kind: RoleKind::Group(vec![acc_voting_body()].into_iter().collect()),
+                    permissions: vec!["Dissolve".to_string(),]
                     .into_iter()
                     .collect(),
                     vote_policy: HashMap::default(),

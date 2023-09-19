@@ -113,10 +113,6 @@ pub enum ProposalKind {
     ChangePolicyUpdateDefaultVotePolicy { vote_policy: VotePolicy },
     /// Update the parameters from the policy. This is short cut to updating the whole policy.
     ChangePolicyUpdateParameters { parameters: PolicyParameters },
-    /// Veto hook for house
-    VetoProposal {},
-    /// Dissolve hook for house
-    Dissolve {}
 }
 
 impl ProposalKind {
@@ -142,8 +138,6 @@ impl ProposalKind {
                 "policy_update_default_vote_policy"
             }
             ProposalKind::ChangePolicyUpdateParameters { .. } => "policy_update_parameters",
-            ProposalKind::VetoProposal {  } => "veto_proposal",
-            ProposalKind::Dissolve {  } => "dissolve",
         }
     }
 }
@@ -412,12 +406,6 @@ impl Contract {
                 new_policy.update_parameters(parameters);
                 self.policy.set(&VersionedPolicy::Current(new_policy));
                 PromiseOrValue::Value(())
-            }
-            ProposalKind::VetoProposal {  } => {
-                panic!("not allowed to veto proposal")
-            }
-            ProposalKind::Dissolve {  } => {
-                panic!("not allowed to dissolve dao")
             }
         };
         match result {

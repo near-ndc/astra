@@ -19,9 +19,6 @@ pub enum RoleKind {
     Member(U128),
     /// Set of accounts.
     Group(HashSet<AccountId>),
-    /// House accounts
-    /// Note: Hook for houses will only work if change policy is disabled.
-    House(HashSet<AccountId>),
 }
 
 impl RoleKind {
@@ -31,7 +28,6 @@ impl RoleKind {
             RoleKind::Everyone => true,
             RoleKind::Member(amount) => user.amount >= amount.0,
             RoleKind::Group(accounts) => accounts.contains(&user.account_id),
-            RoleKind::House(accounts) => accounts.contains(&user.account_id),
         }
     }
 
@@ -360,6 +356,23 @@ impl Policy {
         (allowed_roles, allowed)
     }
 
+    /// Can given house execute given action on this dao.
+    pub fn can_execute_hook(
+        &self,
+        user: UserInfo,
+        action: &Action,
+    ) -> bool {
+        let mut allowed = false;
+        for role in self.roles.iter() {
+            if role.kind.match_user(&user) {
+                if role.permissions.contains(&action.to_policy_label()) {
+                    allowed = true;
+                }
+            }
+        }
+        allowed
+    }
+
     /// Returns if given proposal kind is token weighted.
     pub fn is_token_weighted(&self, role: &String, proposal_kind_label: &String) -> bool {
         let role_info = self.internal_get_role(role).expect("ERR_ROLE_NOT_FOUND");
@@ -414,8 +427,6 @@ impl Policy {
                     }
                 }
                 RoleKind::Member(_) => total_supply,
-                // Skip house
-                RoleKind::House(_) => continue,
             };
             let threshold = std::cmp::max(
                 vote_policy.quorum.0,

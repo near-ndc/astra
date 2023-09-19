@@ -146,7 +146,7 @@ impl Contract {
     /// Veto proposal hook
     /// Check for authorities and remove proposal
     /// * `id`: proposal id
-    pub fn veto_hook(&mut self, id: u64) {
+    pub fn veto(&mut self, id: u64) {
         let policy = self.policy.get().unwrap().to_policy();
         let res = 
             policy.can_execute_action(UserInfo {
@@ -157,17 +157,24 @@ impl Contract {
         assert!(res.1, "not authorized");
 
         // Check if the proposal exist and is not finalized
-        let proposal: Proposal = self.proposals.get(&id).expect("Proposal doesn't exist").into();
-        if proposal.status == ProposalStatus::InProgress || proposal.status == ProposalStatus::Failed {
+      if let Some(proposal) = self.proposals.get(&id) {
+    match proposal.status {
+        ProposalStatus::InProgress | ProposalStatus::Failed => {
+            // Remove the proposal if it's in progress or failed
             self.proposals.remove(&id);
-        } else {
-            panic!("proposal finalized")
+        }
+        _ => {
+            // Panic if the proposal is finalized
+            panic!("Proposal finalized");
         }
     }
+} else {
+ panic!("proposal does not exist");
+ }
+    }
 
-    /// Dissolve proposal hook
-    /// Check for authorities and remove all the members
-    /// Transfer funds to trust
+    /// Dissolves the DAO by removing all members, closing all active proposals and returning bonds.
+    /// Transfers all reminding funds to the trust.
     pub fn dissolve_hook(&mut self) {
         let policy = self.policy.get().unwrap().to_policy();
         let res = 
@@ -178,8 +185,6 @@ impl Contract {
         );
         assert!(res.1, "not authorized");
 
-        // All the members are removed so operations are in freeze state
-        let mut policy = self.policy.get().unwrap().to_policy();
         // Return bond amounts
         for prop_id in 0..self.last_proposal_id {
             let prop: Proposal = self.proposals.get(&prop_id).unwrap().into();
@@ -251,10 +256,10 @@ mod tests {
         })
     }
 
-    fn setup_hook_proposal() -> (VMContext, Contract, u64) {
+    fn setup_ctr() -> (VMContext, Contract, u64) {
         let mut context = VMContextBuilder::new();
         testing_env!(context.predecessor_account_id(accounts(1)).build());
-        let mut policy = VersionedPolicy::Default(vec![accounts(2)]).upgrade();
+        let mut policy = VersionedPolicy::Default(vec![acc_voting_body()]).upgrade();
         policy.to_policy_mut().roles[1]
             .permissions
             .insert("*:VetoProposal".to_string());

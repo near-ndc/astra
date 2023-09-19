@@ -190,7 +190,7 @@ impl Contract {
             policy.can_execute_action(UserInfo {
                 amount: 0u128,
                 account_id: env::predecessor_account_id(),
-            }, &ProposalKind::VetoProposal{}, &Action::VetoProposal);
+            }, &ProposalKind::Dissolve{}, &Action::Dissolve);
             assert!(res.1, "not authorized");
         } else {
             panic!("policy not found!")
@@ -247,6 +247,9 @@ pub extern "C" fn store_blob() {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{HashMap};
+
+    use near_sdk::json_types::U64;
     use near_sdk::test_utils::{accounts, VMContextBuilder};
     use near_sdk::{testing_env, VMContext};
     use near_units::parse_near;
@@ -259,8 +262,24 @@ mod tests {
         AccountId::new_unchecked("votingbody.near".to_string())
     }
 
+    fn council_of_advisors() -> AccountId {
+        AccountId::new_unchecked("coa.near".to_string())
+    }
+
     fn ndc_trust() -> AccountId {
         AccountId::new_unchecked("ndctrust.near".to_string())
+    }
+
+    fn council_member_1() -> AccountId {
+        AccountId::new_unchecked("council1.near".to_string())
+    }
+
+    fn council_member_2() -> AccountId {
+        AccountId::new_unchecked("council2.near".to_string())
+    }
+
+    fn council_member_3() -> AccountId {
+        AccountId::new_unchecked("council3.near".to_string())
     }
 
     fn create_proposal(context: &mut VMContextBuilder, contract: &mut Contract) -> u64 {
@@ -276,21 +295,64 @@ mod tests {
         })
     }
 
+    /// Council members with Add, vote on proposal permissions
+    /// House CoA with Veto permission
+    /// House VB with dissolve permission
+    fn house_policy() -> Policy {
+        Policy {
+            roles: vec![
+                RolePermission {
+                    name: "council".to_string(),
+                    kind: RoleKind::Group(vec![council_member_1(), council_member_2(), council_member_3()].into_iter().collect()),
+                    // All actions except RemoveProposal are allowed by council.
+                    permissions: vec![
+                        "*:AddProposal".to_string(),
+                        "*:VoteApprove".to_string(),
+                        "*:VoteReject".to_string(),
+                        "*:VoteRemove".to_string(),
+                        "*:Finalize".to_string(),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    vote_policy: HashMap::default(),
+                },
+                RolePermission {
+                    name: "CoA".to_string(),
+                    kind: RoleKind::House(vec![council_of_advisors()].into_iter().collect()),
+                    permissions: vec![
+                        "*:VetoProposal".to_string(),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    vote_policy: HashMap::default(),
+                },
+                RolePermission {
+                    name: "VotingBody".to_string(),
+                    kind: RoleKind::House(vec![acc_voting_body()].into_iter().collect()),
+                    permissions: vec!["*:Dissolve".to_string(),]
+                    .into_iter()
+                    .collect(),
+                    vote_policy: HashMap::default(),
+                },
+            ],
+            default_vote_policy: VotePolicy::default(),
+            proposal_bond: U128(10u128.pow(24)),
+            proposal_period: U64::from(1_000_000_000 * 60 * 60 * 24 * 7),
+            bounty_bond: U128(10u128.pow(24)),
+            bounty_forgiveness_period: U64::from(1_000_000_000 * 60 * 60 * 24),
+        }
+    }
+
+    /// Add voting_body with Dissolve permission
+    /// Add CoA with Veto permission
     fn setup_ctr() -> (VMContext, Contract, u64) {
         let mut context = VMContextBuilder::new();
-        let mut policy = VersionedPolicy::Default(vec![acc_voting_body()]).upgrade();
-        policy.to_policy_mut().roles[1]
-            .permissions
-            .insert("*:VetoProposal".to_string());
-        policy.to_policy_mut().roles[1]
-            .permissions
-            .insert("*:Dissolve".to_string());
         let mut contract = Contract::new(
             Config::test_config(),
-            policy,
+            policy::VersionedPolicy::Current(house_policy()),
             ndc_trust()
         );
-        testing_env!(context.predecessor_account_id(accounts(1)).build());
+        testing_env!(context.predecessor_account_id(council_member_1()).build());
         let id = create_proposal(&mut context, &mut contract);
         (context.build(), contract, id)
     } 
@@ -449,7 +511,7 @@ mod tests {
         let (mut context, mut contract, id)= setup_ctr();
         assert_eq!(contract.get_proposal(id).id, id);
 
-        context.predecessor_account_id = accounts(2);
+        context.predecessor_account_id = council_of_advisors();
         testing_env!(context);
         contract.veto(id);
 
@@ -473,13 +535,13 @@ mod tests {
         let mut res = contract.policy.get().unwrap().to_policy();
         assert_eq!(res.roles.is_empty(), false);
 
-        context.predecessor_account_id = accounts(2);
+        context.predecessor_account_id = acc_voting_body();
         testing_env!(context.clone());
         contract.dissolve();
         res = contract.policy.get().unwrap().to_policy();
         assert_eq!(res.roles.is_empty(), true);
 
-        context.predecessor_account_id = accounts(1);
+        context.predecessor_account_id = council_member_1();
         context.attached_deposit = parse_near!("1 N");
         testing_env!(context);
 

@@ -226,9 +226,9 @@ near view $ASTRA_ID get_policy
 
 - A role with: `["*:*"]` has _unlimited_ permission. Normally, the `council` role has `*:*` as its permission so they can perform _any_ vote action on _any_ kind of proposal.
 
-- A role with: `["*:VetoProposal"]` can perform veto action on any proposal.
+- A role with: `["VetoProposal"]` can perform veto action on any proposal.
 
-- A role with: `["*:Dissolve"]` can dissolve this DAO.
+- A role with: `["Dissolve"]` can dissolve this DAO.
 
 **Here is a list of actions:**
 

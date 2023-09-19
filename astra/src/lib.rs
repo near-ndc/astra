@@ -540,13 +540,13 @@ mod tests {
         assert_eq!(contract.get_proposal(id).id, id);
 
         let mut res = contract.policy.get().unwrap().to_policy();
-        assert_eq!(res.roles.is_empty(), false);
+        assert!(!res.roles.is_empty());
 
         context.predecessor_account_id = acc_voting_body();
         testing_env!(context.clone());
         contract.dissolve();
         res = contract.policy.get().unwrap().to_policy();
-        assert_eq!(res.roles.is_empty(), true);
+        assert!(res.roles.is_empty());
 
         context.predecessor_account_id = council_member_1();
         context.attached_deposit = parse_near!("1 N");
@@ -587,7 +587,7 @@ mod tests {
 
         // no more members should be able to vote
         context.predecessor_account_id = council_member_4();
-        testing_env!(context.clone());
+        testing_env!(context);
         contract.act_proposal(id, Action::VoteApprove, Some("vote on prosposal".to_string()));
     }
 }

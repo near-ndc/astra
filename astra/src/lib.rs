@@ -25,6 +25,8 @@ mod proposals;
 mod types;
 mod upgrade;
 pub mod views;
+#[cfg(test)]
+pub mod test_utils;
 
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKeys {
@@ -255,36 +257,9 @@ mod tests {
     use near_units::parse_near;
 
     use crate::proposals::ProposalStatus;
+    use crate::test_utils::*;
 
     use super::*;
-
-    fn acc_voting_body() -> AccountId {
-        AccountId::new_unchecked("votingbody.near".to_string())
-    }
-
-    fn council_of_advisors() -> AccountId {
-        AccountId::new_unchecked("coa.near".to_string())
-    }
-
-    fn ndc_trust() -> AccountId {
-        AccountId::new_unchecked("ndctrust.near".to_string())
-    }
-
-    fn council_member_1() -> AccountId {
-        AccountId::new_unchecked("council1.near".to_string())
-    }
-
-    fn council_member_2() -> AccountId {
-        AccountId::new_unchecked("council2.near".to_string())
-    }
-
-    fn council_member_3() -> AccountId {
-        AccountId::new_unchecked("council3.near".to_string())
-    }
-
-    fn council_member_4() -> AccountId {
-        AccountId::new_unchecked("council1.near".to_string())
-    }
 
     fn create_proposal(context: &mut VMContextBuilder, contract: &mut Contract) -> u64 {
         testing_env!(context.attached_deposit(parse_near!("1 N")).build());

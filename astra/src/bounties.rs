@@ -210,12 +210,9 @@ mod tests {
 
     use crate::proposals::{ProposalInput, ProposalKind};
     use crate::{Action, Config};
+    use crate::test_utils::ndc_trust;
 
     use super::*;
-
-    fn ndc_trust() -> AccountId {
-        AccountId::new_unchecked("ndctrust.near".to_string())
-    }
 
     fn add_bounty(context: &mut VMContextBuilder, contract: &mut Contract, times: u32) -> u64 {
         testing_env!(context.attached_deposit(parse_near!("1 N")).build());

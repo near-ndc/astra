@@ -282,6 +282,10 @@ mod tests {
         AccountId::new_unchecked("council3.near".to_string())
     }
 
+    fn council_member_4() -> AccountId {
+        AccountId::new_unchecked("council1.near".to_string())
+    }
+
     fn create_proposal(context: &mut VMContextBuilder, contract: &mut Contract) -> u64 {
         testing_env!(context.attached_deposit(parse_near!("1 N")).build());
         contract.add_proposal(ProposalInput {
@@ -295,15 +299,17 @@ mod tests {
         })
     }
 
-    /// Council members with Add, vote on proposal permissions
-    /// House CoA with Veto permission
-    /// House VB with dissolve permission
+    /// Council members with Add, vote on proposal permissions : Accounts [council_member_1, council_member_2, council_member_3
+    /// council_member_4]
+    /// House CoA with Veto permission : Accounts [ council_of_advisors ]
+    /// House VB with dissolve permission : Accounts [ acc_voting_body ]
     fn house_policy() -> Policy {
         Policy {
             roles: vec![
                 RolePermission {
                     name: "council".to_string(),
-                    kind: RoleKind::Group(vec![council_member_1(), council_member_2(), council_member_3()].into_iter().collect()),
+                    kind: RoleKind::Group(vec![council_member_1(), council_member_2(),
+                        council_member_3(), council_member_4()].into_iter().collect()),
                     // All actions except RemoveProposal are allowed by council.
                     permissions: vec![
                         "*:AddProposal".to_string(),
@@ -507,7 +513,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "ERR_NO_PROPOSAL")]
-    fn test_veto_hook() {
+    fn test_veto() {
         let (mut context, mut contract, id)= setup_ctr();
         assert_eq!(contract.get_proposal(id).id, id);
 
@@ -516,11 +522,12 @@ mod tests {
         contract.veto(id);
 
         contract.get_proposal(id);
+        // TODO: this should not panic, instead return NONE
     }
 
     #[test]
     #[should_panic(expected = "not authorized")]
-    fn test_veto_hook_unauthorised() {
+    fn test_veto_unauthorised() {
         let (_, mut contract, id)= setup_ctr();
         assert_eq!(contract.get_proposal(id).id, id);
         contract.veto(id);
@@ -528,7 +535,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "ERR_PERMISSION_DENIED")]
-    fn test_dissolve_hook() {
+    fn test_dissolve() {
         let (mut context, mut contract, id)= setup_ctr();
         assert_eq!(contract.get_proposal(id).id, id);
 
@@ -553,5 +560,34 @@ mod tests {
                 role: "Council".to_string(),
             },
         });
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_NO_PROPOSAL")]
+    fn test_whole_flow_interhouse_dissolve() {
+        let (mut context, mut contract, id)= setup_ctr();
+        // council member 1 made a proposal
+        assert_eq!(contract.get_proposal(id).id, id);
+
+        // Other members vote
+        context.predecessor_account_id = council_member_2();
+        testing_env!(context.clone());
+        contract.act_proposal(id, Action::VoteApprove, Some("vote on prosposal".to_string()));
+        assert!(contract.get_proposal(id).proposal.votes.contains_key(&council_member_2()));
+
+        context.predecessor_account_id = council_member_3();
+        testing_env!(context.clone());
+        contract.act_proposal(id, Action::VoteReject, Some("vote on prosposal".to_string()));
+        assert!(contract.get_proposal(id).proposal.votes.contains_key(&council_member_3()));
+
+        // Voting body vetos
+        context.predecessor_account_id = council_of_advisors();
+        testing_env!(context.clone());
+        contract.veto(id);
+
+        // no more members should be able to vote
+        context.predecessor_account_id = council_member_4();
+        testing_env!(context.clone());
+        contract.act_proposal(id, Action::VoteApprove, Some("vote on prosposal".to_string()));
     }
 }

@@ -319,6 +319,52 @@ mod tests {
     }
 
     #[test]
+    fn test_proposal_execution() {
+        let mut context = VMContextBuilder::new();
+        testing_env!(context.predecessor_account_id(accounts(1)).build());
+        let mut contract = Contract::new(
+            Config::test_config(),
+            VersionedPolicy::Default(vec![accounts(1)]),
+        );
+
+        let id = create_proposal(&mut context, &mut contract);
+        contract.act_proposal(id, Action::VoteApprove, None, Some(false));
+        // verify proposal wasn't approved during final vote
+        assert_eq!(
+            contract.get_proposal(id).proposal.status,
+            ProposalStatus::InProgress
+        );
+
+        contract.act_proposal(id, Action::ExecuteProposal, None, None);
+        assert_eq!(
+            contract.get_proposal(id).proposal.status,
+            ProposalStatus::Approved
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_PROPOSAL_NOT_IN_PROGRESS")]
+    fn test_proposal_double_execution() {
+        let mut context = VMContextBuilder::new();
+        testing_env!(context.predecessor_account_id(accounts(1)).build());
+        let mut contract = Contract::new(
+            Config::test_config(),
+            VersionedPolicy::Default(vec![accounts(1)]),
+        );
+
+        let id = create_proposal(&mut context, &mut contract);
+        contract.act_proposal(id, Action::VoteApprove, None, None);
+        // verify proposal was approved and executed
+        assert_eq!(
+            contract.get_proposal(id).proposal.status,
+            ProposalStatus::Approved
+        );
+
+        // panics if we try to execute again
+        contract.act_proposal(id, Action::ExecuteProposal, None, None);
+    }
+
+    #[test]
     #[should_panic(expected = "ERR_INVALID_POLICY")]
     fn test_fails_adding_invalid_policy() {
         let mut context = VMContextBuilder::new();

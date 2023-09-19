@@ -60,6 +60,8 @@ pub enum Action {
     Finalize,
     /// Move a proposal to the hub to shift into another DAO.
     MoveToHub,
+    /// Execute proposal and update proposal status
+    ExecuteProposal
 }
 
 impl Action {

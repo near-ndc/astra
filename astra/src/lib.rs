@@ -146,44 +146,55 @@ impl Contract {
     /// Veto proposal hook
     /// Check for authorities and remove proposal
     /// * `id`: proposal id
+    /// TODO: Add events for veto and dissolve
     pub fn veto(&mut self, id: u64) {
-        let policy = self.policy.get().unwrap().to_policy();
-        let res = 
+        if let Some(pol) = self.policy.get() {
+            let policy = pol.to_policy();
+            let res = 
             policy.can_execute_action(UserInfo {
                 amount: 0u128,
                 account_id: env::predecessor_account_id(),
-            }, &ProposalKind::VetoProposal{}, &Action::VetoProposal
-        );
-        assert!(res.1, "not authorized");
+            }, &ProposalKind::VetoProposal{}, &Action::VetoProposal);
+            assert!(res.1, "not authorized");
+        } else {
+            panic!("policy not found!")
+        }
 
         // Check if the proposal exist and is not finalized
-      if let Some(proposal) = self.proposals.get(&id) {
-    match proposal.status {
-        ProposalStatus::InProgress | ProposalStatus::Failed => {
-            // Remove the proposal if it's in progress or failed
-            self.proposals.remove(&id);
+        if let Some(prop) = self.proposals.get(&id) {
+            let proposal: Proposal = prop.into();
+            match proposal.status {
+                ProposalStatus::InProgress | ProposalStatus::Failed => {
+                    // Remove the proposal if it's in progress or failed
+                    self.proposals.remove(&id);
+                }
+                _ => {
+                    // Panic if the proposal is finalized
+                    panic!("Proposal finalized");
+                }
+            }
+        } else {
+            panic!("proposal does not exist");
         }
-        _ => {
-            // Panic if the proposal is finalized
-            panic!("Proposal finalized");
-        }
-    }
-} else {
- panic!("proposal does not exist");
- }
+       
     }
 
     /// Dissolves the DAO by removing all members, closing all active proposals and returning bonds.
     /// Transfers all reminding funds to the trust.
-    pub fn dissolve_hook(&mut self) {
-        let policy = self.policy.get().unwrap().to_policy();
-        let res = 
+    /// Panics if policy doesn't exist or accound is not authorised to execute dissolve
+    pub fn dissolve(&mut self) {
+        let mut policy;
+        if let Some(pol) = self.policy.get() {
+            policy = pol.to_policy();
+            let res = 
             policy.can_execute_action(UserInfo {
                 amount: 0u128,
                 account_id: env::predecessor_account_id(),
-            }, &ProposalKind::Dissolve{}, &Action::Dissolve
-        );
-        assert!(res.1, "not authorized");
+            }, &ProposalKind::VetoProposal{}, &Action::VetoProposal);
+            assert!(res.1, "not authorized");
+        } else {
+            panic!("policy not found!")
+        }
 
         // Return bond amounts
         for prop_id in 0..self.last_proposal_id {
@@ -191,6 +202,7 @@ impl Contract {
             if prop.status == ProposalStatus::InProgress {
                 self.internal_return_bonds(&policy, &prop);
             }
+            self.proposals.remove(&prop_id);
         }
 
         policy.roles = vec![];
@@ -198,7 +210,7 @@ impl Contract {
 
         let funds = env::account_balance() - self.locked_amount;
         Promise::new(self.trust.clone()).transfer(funds);
-     }
+    }
 }
 
 /// Stores attached data into blob store and returns hash of it.
@@ -243,6 +255,14 @@ mod tests {
 
     use super::*;
 
+    fn acc_voting_body() -> AccountId {
+        AccountId::new_unchecked("votingbody.near".to_string())
+    }
+
+    fn ndc_trust() -> AccountId {
+        AccountId::new_unchecked("ndctrust.near".to_string())
+    }
+
     fn create_proposal(context: &mut VMContextBuilder, contract: &mut Contract) -> u64 {
         testing_env!(context.attached_deposit(parse_near!("1 N")).build());
         contract.add_proposal(ProposalInput {
@@ -258,7 +278,6 @@ mod tests {
 
     fn setup_ctr() -> (VMContext, Contract, u64) {
         let mut context = VMContextBuilder::new();
-        testing_env!(context.predecessor_account_id(accounts(1)).build());
         let mut policy = VersionedPolicy::Default(vec![acc_voting_body()]).upgrade();
         policy.to_policy_mut().roles[1]
             .permissions
@@ -269,8 +288,9 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             policy,
-            accounts(1)
+            ndc_trust()
         );
+        testing_env!(context.predecessor_account_id(accounts(1)).build());
         let id = create_proposal(&mut context, &mut contract);
         (context.build(), contract, id)
     } 
@@ -282,7 +302,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
-            accounts(1)
+            ndc_trust()
         );
         let id = create_proposal(&mut context, &mut contract);
         assert_eq!(contract.get_proposal(id).proposal.description, "test");
@@ -328,7 +348,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
-            accounts(1)
+            ndc_trust()
         );
         let id = create_proposal(&mut context, &mut contract);
         assert_eq!(contract.get_proposal(id).proposal.description, "test");
@@ -357,7 +377,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
-            accounts(1)
+            ndc_trust()
         );
         let id = create_proposal(&mut context, &mut contract);
         testing_env!(context
@@ -374,7 +394,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1), accounts(2)]),
-            accounts(1)
+            ndc_trust()
         );
         let id = create_proposal(&mut context, &mut contract);
         contract.act_proposal(id, Action::VoteApprove, None);
@@ -388,7 +408,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
-            accounts(1)
+            ndc_trust()
         );
         testing_env!(context.attached_deposit(parse_near!("1 N")).build());
         let id = contract.add_proposal(ProposalInput {
@@ -412,7 +432,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
-            accounts(1)
+            ndc_trust()
         );
         testing_env!(context.attached_deposit(parse_near!("1 N")).build());
         let _id = contract.add_proposal(ProposalInput {
@@ -426,12 +446,12 @@ mod tests {
     #[test]
     #[should_panic(expected = "ERR_NO_PROPOSAL")]
     fn test_veto_hook() {
-        let (mut context, mut contract, id)= setup_hook_proposal();
+        let (mut context, mut contract, id)= setup_ctr();
         assert_eq!(contract.get_proposal(id).id, id);
 
         context.predecessor_account_id = accounts(2);
         testing_env!(context);
-        contract.veto_hook(id);
+        contract.veto(id);
 
         contract.get_proposal(id);
     }
@@ -439,15 +459,15 @@ mod tests {
     #[test]
     #[should_panic(expected = "not authorized")]
     fn test_veto_hook_unauthorised() {
-        let (_, mut contract, id)= setup_hook_proposal();
+        let (_, mut contract, id)= setup_ctr();
         assert_eq!(contract.get_proposal(id).id, id);
-        contract.veto_hook(id);
+        contract.veto(id);
     }
 
     #[test]
     #[should_panic(expected = "ERR_PERMISSION_DENIED")]
     fn test_dissolve_hook() {
-        let (mut context, mut contract, id)= setup_hook_proposal();
+        let (mut context, mut contract, id)= setup_ctr();
         assert_eq!(contract.get_proposal(id).id, id);
 
         let mut res = contract.policy.get().unwrap().to_policy();
@@ -455,7 +475,7 @@ mod tests {
 
         context.predecessor_account_id = accounts(2);
         testing_env!(context.clone());
-        contract.dissolve_hook();
+        contract.dissolve();
         res = contract.policy.get().unwrap().to_policy();
         assert_eq!(res.roles.is_empty(), true);
 
@@ -463,11 +483,12 @@ mod tests {
         context.attached_deposit = parse_near!("1 N");
         testing_env!(context);
 
+        // Should panic because dao is dissolved
         contract.add_proposal(ProposalInput {
             description: "test".to_string(),
             kind: ProposalKind::AddMemberToRole {
                 member_id: accounts(2),
-                role: "missing".to_string(),
+                role: "Council".to_string(),
             },
         });
     }

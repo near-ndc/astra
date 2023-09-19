@@ -213,6 +213,10 @@ mod tests {
 
     use super::*;
 
+    fn ndc_trust() -> AccountId {
+        AccountId::new_unchecked("ndctrust.near".to_string())
+    }
+
     fn add_bounty(context: &mut VMContextBuilder, contract: &mut Contract, times: u32) -> u64 {
         testing_env!(context.attached_deposit(parse_near!("1 N")).build());
         let id = contract.add_proposal(ProposalInput {
@@ -240,7 +244,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
-            accounts(1)
+            ndc_trust()
         );
         add_bounty(&mut context, &mut contract, 2);
 
@@ -304,7 +308,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
-            accounts(1)
+            ndc_trust()
         );
         let id = add_bounty(&mut context, &mut contract, 1);
         contract.bounty_claim(id, U64::from(500));

@@ -86,7 +86,6 @@ pub struct Contract {
     /// AccountId which is a recipient of DAO funds in case the DAO will dissolve.
     pub trust: AccountId,
 
-    /// Contract status, it could active or dissolved
     pub status: ContractStatus,
 }
 
@@ -309,26 +308,18 @@ mod tests {
                         "*:VoteRemove".to_string(),
                         "*:Finalize".to_string(),
                     ]
-                    .into_iter()
-                    .collect(),
                     vote_policy: HashMap::default(),
                 },
                 RolePermission {
                     name: "CoA".to_string(),
                     kind: RoleKind::Group(vec![council_of_advisors()].into_iter().collect()),
-                    permissions: vec![
-                        "VetoProposal".to_string(),
-                    ]
-                    .into_iter()
-                    .collect(),
+                    permissions: vec!["VetoProposal".to_string()],
                     vote_policy: HashMap::default(),
                 },
                 RolePermission {
                     name: "VotingBody".to_string(),
                     kind: RoleKind::Group(vec![acc_voting_body()].into_iter().collect()),
-                    permissions: vec!["Dissolve".to_string(),]
-                    .into_iter()
-                    .collect(),
+                    permissions: vec!["Dissolve".to_string()],
                     vote_policy: HashMap::default(),
                 },
             ],

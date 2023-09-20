@@ -154,17 +154,12 @@ impl Contract {
     /// * `id`: proposal id
     /// TODO: Add events for veto and dissolve
     pub fn veto(&mut self, id: u64) {
-        if let Some(pol) = self.policy.get() {
-            let policy = pol.to_policy();
-            let res = 
-            policy.can_execute_hook(UserInfo {
-                amount: 0u128,
-                account_id: env::predecessor_account_id(),
-            }, &Action::VetoProposal);
-            assert!(res, "not authorized");
-        } else {
-            panic!("policy not found!")
-        }
+        let policy = self.assert_policy();
+        let res = policy.can_execute_hook(UserInfo {
+            amount: 0u128,
+            account_id: env::predecessor_account_id(),
+        }, &Action::VetoProposal);
+        assert!(res, "not authorized");
 
         // Check if the proposal exist and is not finalized
         if let Some(prop) = self.proposals.get(&id) {
@@ -187,18 +182,12 @@ impl Contract {
     /// Transfers all reminding funds to the trust.
     /// Panics if policy doesn't exist or accound is not authorised to execute dissolve
     pub fn dissolve(&mut self) {
-        let mut policy;
-        if let Some(pol) = self.policy.get() {
-            policy = pol.to_policy();
-            let res = 
-            policy.can_execute_hook(UserInfo {
-                amount: 0u128,
-                account_id: env::predecessor_account_id(),
-            }, &Action::Dissolve);
-            assert!(res, "not authorized");
-        } else {
-            panic!("policy not found!")
-        }
+        let mut policy = self.assert_policy();
+        let res = policy.can_execute_hook(UserInfo {
+            amount: 0u128,
+            account_id: env::predecessor_account_id(),
+        }, &Action::Dissolve);
+        assert!(res, "not authorized");
 
         self.status = ContractStatus::Dissolved;
         policy.roles = vec![];
@@ -209,24 +198,27 @@ impl Contract {
     }
 
     pub fn finalize_dissolve(&mut self, from_prop: u64, limit: u64) {
-        let policy;
-        if let Some(pol) = self.policy.get() {
-            policy = pol.to_policy();
-        } else {
-            panic!("policy not found!")
-        }
+        let policy = self.assert_policy();
 
         if self.status == ContractStatus::Active {
             panic!("cannot clear proposals, DAO is in active state!")
         }
         // Return bond amounts
         for prop_id in from_prop..(from_prop+limit) {
-            let prop: Proposal = self.proposals.get(&prop_id).unwrap().into();
-            if prop.status == ProposalStatus::InProgress {
-                self.internal_return_bonds(&policy, &prop);
+            if let Some(prop) = self.proposals.get(&prop_id) {
+                let proposal: Proposal = prop.into();
+                if proposal.status == ProposalStatus::InProgress {
+                    self.internal_return_bonds(&policy, &proposal);
+                }
+                self.proposals.remove(&prop_id);
+            } else {
+                continue;
             }
-            self.proposals.remove(&prop_id);
         }
+    }
+
+    fn assert_policy(&self) -> Policy {
+        self.policy.get().expect("policy not found").to_policy()
     }
 }
 
@@ -308,18 +300,20 @@ mod tests {
                         "*:VoteRemove".to_string(),
                         "*:Finalize".to_string(),
                     ]
+                    .into_iter()
+                    .collect(),
                     vote_policy: HashMap::default(),
                 },
                 RolePermission {
                     name: "CoA".to_string(),
                     kind: RoleKind::Group(vec![council_of_advisors()].into_iter().collect()),
-                    permissions: vec!["VetoProposal".to_string()],
+                    permissions: vec!["VetoProposal".to_string()].into_iter().collect(),
                     vote_policy: HashMap::default(),
                 },
                 RolePermission {
                     name: "VotingBody".to_string(),
                     kind: RoleKind::Group(vec![acc_voting_body()].into_iter().collect()),
-                    permissions: vec!["Dissolve".to_string()],
+                    permissions: vec!["Dissolve".to_string()].into_iter().collect(),
                     vote_policy: HashMap::default(),
                 },
             ],
@@ -341,6 +335,10 @@ mod tests {
             ndc_trust()
         );
         testing_env!(context.predecessor_account_id(council(1)).build());
+        // create four proposals
+        for _ in 0..4 {
+            create_proposal(&mut context, &mut contract);
+        }
         let id = create_proposal(&mut context, &mut contract);
         (context.build(), contract, id)
     } 
@@ -571,5 +569,27 @@ mod tests {
         context.predecessor_account_id = council(4);
         testing_env!(context);
         contract.act_proposal(id, Action::VoteApprove, Some("vote on prosposal".to_string()));
+    }
+
+
+    #[test]
+    fn test_dissolve_missing_proposals() {
+        let (mut context, mut contract, id)= setup_ctr();
+        assert_eq!(contract.get_proposal(id).id, id);
+
+        let mut res = contract.policy.get().unwrap().to_policy();
+        assert!(!res.roles.is_empty());
+
+        context.predecessor_account_id = acc_voting_body();
+        testing_env!(context.clone());
+        contract.dissolve();
+        res = contract.policy.get().unwrap().to_policy();
+        assert!(res.roles.is_empty());
+
+        // remove 1 proposal from middle
+        contract.finalize_dissolve(2, 1);
+
+        // remove all proposals, should not throw error because of missing prop
+        contract.finalize_dissolve(0, 5);
     }
 }

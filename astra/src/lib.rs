@@ -153,7 +153,7 @@ impl Contract {
     /// Check for authorities and remove proposal
     /// * `id`: proposal id
     /// TODO: Add events for veto and dissolve
-    pub fn veto(&mut self, id: u64) {
+    pub fn veto_hook(&mut self, id: u64) {
         let policy = self.assert_policy();
         let res = policy.can_execute_hook(UserInfo {
             amount: 0u128,
@@ -176,7 +176,7 @@ impl Contract {
     /// Dissolves the DAO by removing all members, closing all active proposals and returning bonds.
     /// Transfers all reminding funds to the trust.
     /// Panics if policy doesn't exist or accound is not authorised to execute dissolve
-    pub fn dissolve(&mut self) {
+    pub fn dissolve_hook(&mut self) {
         let mut policy = self.assert_policy();
         let res = policy.can_execute_hook(UserInfo {
             amount: 0u128,
@@ -497,7 +497,7 @@ mod tests {
 
         context.predecessor_account_id = council_of_advisors();
         testing_env!(context);
-        contract.veto(id);
+        contract.veto_hook(id);
 
         contract.get_proposal(id);
         // TODO: this should not panic, instead return NONE
@@ -508,7 +508,7 @@ mod tests {
     fn test_veto_unauthorised() {
         let (_, mut contract, id)= setup_ctr();
         assert_eq!(contract.get_proposal(id).id, id);
-        contract.veto(id);
+        contract.veto_hook(id);
     }
 
     #[test]
@@ -522,7 +522,7 @@ mod tests {
 
         context.predecessor_account_id = acc_voting_body();
         testing_env!(context.clone());
-        contract.dissolve();
+        contract.dissolve_hook();
         res = contract.policy.get().unwrap().to_policy();
         assert!(res.roles.is_empty());
 
@@ -561,7 +561,7 @@ mod tests {
         // Voting body vetos
         context.predecessor_account_id = council_of_advisors();
         testing_env!(context.clone());
-        contract.veto(id);
+        contract.veto_hook(id);
 
         // no more members should be able to vote
         context.predecessor_account_id = council(4);
@@ -580,7 +580,7 @@ mod tests {
 
         context.predecessor_account_id = acc_voting_body();
         testing_env!(context.clone());
-        contract.dissolve();
+        contract.dissolve_hook();
         res = contract.policy.get().unwrap().to_policy();
         assert!(res.roles.is_empty());
 

@@ -210,6 +210,7 @@ mod tests {
 
     use crate::proposals::{ProposalInput, ProposalKind};
     use crate::{Action, Config};
+    use crate::test_utils::ndc_trust;
 
     use super::*;
 
@@ -240,6 +241,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
+            ndc_trust()
         );
         add_bounty(&mut context, &mut contract, 2);
 
@@ -303,6 +305,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
+            ndc_trust()
         );
         let id = add_bounty(&mut context, &mut contract, 1);
         contract.bounty_claim(id, U64::from(500));

@@ -60,6 +60,10 @@ pub enum Action {
     Finalize,
     /// Move a proposal to the hub to shift into another DAO.
     MoveToHub,
+    /// Veto hook
+    VetoProposal,
+    /// Dissovle hook
+    Dissolve,
 }
 
 impl Action {
@@ -80,4 +84,11 @@ pub fn convert_old_to_new_token(old_account_id: &OldAccountId) -> Option<Account
         return None;
     }
     Some(AccountId::new_unchecked(old_account_id.clone()))
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+pub enum ContractStatus {
+    Active,
+    Dissolved
 }

@@ -37,7 +37,7 @@ async fn test_large_policy() -> anyhow::Result<()> {
         metadata: Base64VecU8(vec![]),
     };
     let root_near_account: AccountId = root.id().parse().unwrap();
-    let mut policy = default_policy(vec![root_near_account]);
+    let mut policy = default_policy(vec![root_near_account.clone()]);
     const NO_OF_COUNCILS: u32 = 10;
     const USERS_PER_COUNCIL: u32 = 100;
     for council_no in 0..NO_OF_COUNCILS {
@@ -65,7 +65,7 @@ async fn test_large_policy() -> anyhow::Result<()> {
         policy.add_or_update_role(&role);
     }
 
-    let params = json!({ "config": config, "policy": policy })
+    let params = json!({ "config": config, "policy": policy, "trust": root_near_account})
         .to_string()
         .into_bytes();
 

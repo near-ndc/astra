@@ -23,7 +23,8 @@ pub async fn setup_dao() -> anyhow::Result<(Account, Contract, Worker<Sandbox>)>
     let res1 = dao_contract
         .call("new")
         .args_json(json!({
-            "config": config, "policy": VersionedPolicy::Default(vec![root_near_account])
+            "config": config, "policy": VersionedPolicy::Default(vec![root_near_account.clone()]),
+            "trust": root_near_account
         }))
         .max_gas()
         .transact().await?;

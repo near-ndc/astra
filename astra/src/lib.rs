@@ -6,6 +6,8 @@ use near_sdk::{
     env, ext_contract, near_bindgen, AccountId, Balance, BorshStorageKey, CryptoHash,
     PanicOnDefault, Promise, PromiseResult, PromiseOrValue,
 };
+use policy::UserInfo;
+use types::ContractStatus;
 
 pub use crate::bounties::{Bounty, BountyClaim, VersionedBounty};
 pub use crate::policy::{
@@ -24,6 +26,8 @@ mod proposals;
 mod types;
 mod upgrade;
 pub mod views;
+#[cfg(test)]
+pub mod test_utils;
 
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKeys {
@@ -78,12 +82,17 @@ pub struct Contract {
 
     /// Large blob storage.
     pub blobs: LookupMap<CryptoHash, AccountId>,
+
+    /// AccountId which is a recipient of DAO funds in case the DAO will dissolve.
+    pub trust: AccountId,
+
+    pub status: ContractStatus,
 }
 
 #[near_bindgen]
 impl Contract {
     #[init]
-    pub fn new(config: Config, policy: VersionedPolicy) -> Self {
+    pub fn new(config: Config, policy: VersionedPolicy, trust: AccountId) -> Self {
         let this = Self {
             config: LazyOption::new(StorageKeys::Config, Some(&config)),
             policy: LazyOption::new(StorageKeys::Policy, Some(&policy.upgrade())),
@@ -98,6 +107,8 @@ impl Contract {
             bounty_claims_count: LookupMap::new(StorageKeys::BountyClaimCounts),
             blobs: LookupMap::new(StorageKeys::Blobs),
             locked_amount: 0,
+            trust,
+            status: ContractStatus::Active
         };
         internal_set_factory_info(&FactoryInfo {
             factory_id: env::predecessor_account_id(),
@@ -137,6 +148,76 @@ impl Contract {
     pub fn get_factory_info(&self) -> FactoryInfo {
         internal_get_factory_info()
     }
+
+    /// Veto proposal hook
+    /// Check for authorities and remove proposal
+    /// * `id`: proposal id
+    /// TODO: Add events for veto and dissolve
+    pub fn veto_hook(&mut self, id: u64) {
+        let policy = self.assert_policy();
+        let res = policy.can_execute_hook(UserInfo {
+            amount: 0u128,
+            account_id: env::predecessor_account_id(),
+        }, &Action::VetoProposal);
+        assert!(res, "not authorized");
+
+        // Check if the proposal exist and is not finalized
+        let proposal = self.assert_proposal(&id);
+        match proposal.status {
+            ProposalStatus::InProgress | ProposalStatus::Failed => {
+                self.proposals.remove(&id);
+            }
+            _ => {
+                panic!("Proposal finalized");
+            }
+        }
+    }
+
+    /// Dissolves the DAO by removing all members, closing all active proposals and returning bonds.
+    /// Transfers all reminding funds to the trust.
+    /// Panics if policy doesn't exist or accound is not authorised to execute dissolve
+    pub fn dissolve_hook(&mut self) {
+        let mut policy = self.assert_policy();
+        let res = policy.can_execute_hook(UserInfo {
+            amount: 0u128,
+            account_id: env::predecessor_account_id(),
+        }, &Action::Dissolve);
+        assert!(res, "not authorized");
+
+        self.status = ContractStatus::Dissolved;
+        policy.roles = vec![];
+        self.policy.set(&VersionedPolicy::Current(policy));
+
+        let funds = env::account_balance() - self.locked_amount;
+        Promise::new(self.trust.clone()).transfer(funds);
+    }
+
+    pub fn finalize_dissolve(&mut self, from_prop: u64, limit: u64) {
+        if self.status == ContractStatus::Active {
+            panic!("cannot clear proposals, DAO is in active state!")
+        }
+        let policy = self.assert_policy();
+        // Return bond amounts
+        for prop_id in from_prop..(from_prop+limit) {
+            if let Some(prop) = self.proposals.get(&prop_id) {
+                let proposal: Proposal = prop.into();
+                if proposal.status == ProposalStatus::InProgress {
+                    self.internal_return_bonds(&policy, &proposal);
+                }
+                self.proposals.remove(&prop_id);
+            } else {
+                continue;
+            }
+        }
+    }
+
+    fn assert_policy(&self) -> Policy {
+        self.policy.get().expect("policy not found").to_policy()
+    }
+
+    fn assert_proposal(&self, id: &u64) -> Proposal {
+        self.proposals.get(id).expect("proposal does not exist").into()
+    }
 }
 
 /// Stores attached data into blob store and returns hash of it.
@@ -173,11 +254,15 @@ pub extern "C" fn store_blob() {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{HashMap};
+
+    use near_sdk::json_types::U64;
     use near_sdk::test_utils::{accounts, VMContextBuilder};
-    use near_sdk::testing_env;
+    use near_sdk::{testing_env, VMContext};
     use near_units::parse_near;
 
     use crate::proposals::ProposalStatus;
+    use crate::test_utils::*;
 
     use super::*;
 
@@ -194,6 +279,68 @@ mod tests {
         })
     }
 
+    /// Council members with Add, vote on proposal permissions : Accounts [council_member_1, council_member_2, council_member_3
+    /// council_member_4]
+    /// House CoA with Veto permission : Accounts [ council_of_advisors ]
+    /// House VB with dissolve permission : Accounts [ acc_voting_body ]
+    fn house_policy() -> Policy {
+        Policy {
+            roles: vec![
+                RolePermission {
+                    name: "council".to_string(),
+                    kind: RoleKind::Group(vec![council(1), council(2),
+                        council(3), council(4)].into_iter().collect()),
+                    // All actions except RemoveProposal are allowed by council.
+                    permissions: vec![
+                        "*:AddProposal".to_string(),
+                        "*:VoteApprove".to_string(),
+                        "*:VoteReject".to_string(),
+                        "*:VoteRemove".to_string(),
+                        "*:Finalize".to_string(),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    vote_policy: HashMap::default(),
+                },
+                RolePermission {
+                    name: "CoA".to_string(),
+                    kind: RoleKind::Group(vec![council_of_advisors()].into_iter().collect()),
+                    permissions: vec!["VetoProposal".to_string()].into_iter().collect(),
+                    vote_policy: HashMap::default(),
+                },
+                RolePermission {
+                    name: "VotingBody".to_string(),
+                    kind: RoleKind::Group(vec![acc_voting_body()].into_iter().collect()),
+                    permissions: vec!["Dissolve".to_string()].into_iter().collect(),
+                    vote_policy: HashMap::default(),
+                },
+            ],
+            default_vote_policy: VotePolicy::default(),
+            proposal_bond: U128(10u128.pow(24)),
+            proposal_period: U64::from(1_000_000_000 * 60 * 60 * 24 * 7),
+            bounty_bond: U128(10u128.pow(24)),
+            bounty_forgiveness_period: U64::from(1_000_000_000 * 60 * 60 * 24),
+        }
+    }
+
+    /// Add voting_body with Dissolve permission
+    /// Add CoA with Veto permission
+    fn setup_ctr() -> (VMContext, Contract, u64) {
+        let mut context = VMContextBuilder::new();
+        let mut contract = Contract::new(
+            Config::test_config(),
+            policy::VersionedPolicy::Current(house_policy()),
+            ndc_trust()
+        );
+        testing_env!(context.predecessor_account_id(council(1)).build());
+        // create four proposals
+        for _ in 0..4 {
+            create_proposal(&mut context, &mut contract);
+        }
+        let id = create_proposal(&mut context, &mut contract);
+        (context.build(), contract, id)
+    } 
+
     #[test]
     fn test_basics() {
         let mut context = VMContextBuilder::new();
@@ -201,6 +348,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
+            ndc_trust()
         );
         let id = create_proposal(&mut context, &mut contract);
         assert_eq!(contract.get_proposal(id).proposal.description, "test");
@@ -246,6 +394,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
+            ndc_trust()
         );
         let id = create_proposal(&mut context, &mut contract);
         assert_eq!(contract.get_proposal(id).proposal.description, "test");
@@ -260,7 +409,7 @@ mod tests {
         policy.to_policy_mut().roles[1]
             .permissions
             .insert("*:RemoveProposal".to_string());
-        let mut contract = Contract::new(Config::test_config(), policy);
+        let mut contract = Contract::new(Config::test_config(), policy, accounts(1));
         let id = create_proposal(&mut context, &mut contract);
         assert_eq!(contract.get_proposal(id).proposal.description, "test");
         contract.act_proposal(id, Action::RemoveProposal, None);
@@ -274,6 +423,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
+            ndc_trust()
         );
         let id = create_proposal(&mut context, &mut contract);
         testing_env!(context
@@ -290,6 +440,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1), accounts(2)]),
+            ndc_trust()
         );
         let id = create_proposal(&mut context, &mut contract);
         contract.act_proposal(id, Action::VoteApprove, None);
@@ -303,6 +454,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
+            ndc_trust()
         );
         testing_env!(context.attached_deposit(parse_near!("1 N")).build());
         let id = contract.add_proposal(ProposalInput {
@@ -326,6 +478,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
+            ndc_trust()
         );
         testing_env!(context.attached_deposit(parse_near!("1 N")).build());
         let _id = contract.add_proposal(ProposalInput {
@@ -334,5 +487,107 @@ mod tests {
                 policy: VersionedPolicy::Default(vec![]),
             },
         });
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_NO_PROPOSAL")]
+    fn test_veto() {
+        let (mut context, mut contract, id)= setup_ctr();
+        assert_eq!(contract.get_proposal(id).id, id);
+
+        context.predecessor_account_id = council_of_advisors();
+        testing_env!(context);
+        contract.veto_hook(id);
+
+        contract.get_proposal(id);
+        // TODO: this should not panic, instead return NONE
+    }
+
+    #[test]
+    #[should_panic(expected = "not authorized")]
+    fn test_veto_unauthorised() {
+        let (_, mut contract, id)= setup_ctr();
+        assert_eq!(contract.get_proposal(id).id, id);
+        contract.veto_hook(id);
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot perform this action, dao is dissolved!")]
+    fn test_dissolve() {
+        let (mut context, mut contract, id)= setup_ctr();
+        assert_eq!(contract.get_proposal(id).id, id);
+
+        let mut res = contract.policy.get().unwrap().to_policy();
+        assert!(!res.roles.is_empty());
+
+        context.predecessor_account_id = acc_voting_body();
+        testing_env!(context.clone());
+        contract.dissolve_hook();
+        res = contract.policy.get().unwrap().to_policy();
+        assert!(res.roles.is_empty());
+
+        context.predecessor_account_id = council(1);
+        context.attached_deposit = parse_near!("1 N");
+        testing_env!(context);
+
+        // Should panic because dao is dissolved
+        contract.add_proposal(ProposalInput {
+            description: "test".to_string(),
+            kind: ProposalKind::AddMemberToRole {
+                member_id: accounts(2),
+                role: "Council".to_string(),
+            },
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_NO_PROPOSAL")]
+    fn test_whole_flow_interhouse_dissolve() {
+        let (mut context, mut contract, id)= setup_ctr();
+        // council member 1 made a proposal
+        assert_eq!(contract.get_proposal(id).id, id);
+
+        // Other members vote
+        context.predecessor_account_id = council(2);
+        testing_env!(context.clone());
+        contract.act_proposal(id, Action::VoteApprove, Some("vote on prosposal".to_string()));
+        assert!(contract.get_proposal(id).proposal.votes.contains_key(&council(2)));
+
+        context.predecessor_account_id = council(3);
+        testing_env!(context.clone());
+        contract.act_proposal(id, Action::VoteReject, Some("vote on prosposal".to_string()));
+        assert!(contract.get_proposal(id).proposal.votes.contains_key(&council(3)));
+
+        // Voting body vetos
+        context.predecessor_account_id = council_of_advisors();
+        testing_env!(context.clone());
+        contract.veto_hook(id);
+
+        // no more members should be able to vote
+        context.predecessor_account_id = council(4);
+        testing_env!(context);
+        contract.act_proposal(id, Action::VoteApprove, Some("vote on prosposal".to_string()));
+    }
+
+
+    #[test]
+    fn test_dissolve_missing_proposals() {
+        let (mut context, mut contract, id)= setup_ctr();
+        assert_eq!(contract.get_proposal(id).id, id);
+
+        let mut res = contract.policy.get().unwrap().to_policy();
+        assert!(!res.roles.is_empty());
+
+        context.predecessor_account_id = acc_voting_body();
+        testing_env!(context.clone());
+        contract.dissolve_hook();
+        res = contract.policy.get().unwrap().to_policy();
+        assert!(res.roles.is_empty());
+
+        // remove 1 proposal from middle
+        contract.finalize_dissolve(2, 1);
+
+        // remove all proposals, should not throw error because of missing prop
+        contract.finalize_dissolve(0, 5);
     }
 }

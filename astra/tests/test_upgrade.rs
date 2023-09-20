@@ -28,8 +28,8 @@ async fn test_upgrade_using_factory() -> anyhow::Result<()> {
     };
     let root_near_account: AccountId = root.id().parse().unwrap();
 
-    let policy = VersionedPolicy::Default(vec![root_near_account]);
-    let params = json!({ "config": config, "policy": policy })
+    let policy = VersionedPolicy::Default(vec![root_near_account.clone()]);
+    let params = json!({ "config": config, "policy": policy, "trust": root_near_account})
         .to_string()
         .into_bytes();
 

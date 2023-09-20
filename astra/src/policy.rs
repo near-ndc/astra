@@ -362,15 +362,13 @@ impl Policy {
         user: UserInfo,
         action: &Action,
     ) -> bool {
-        let mut allowed = false;
+        let perm = action.to_policy_label();
         for role in self.roles.iter() {
-            if role.kind.match_user(&user) {
-                if role.permissions.contains(&action.to_policy_label()) {
-                    allowed = true;
-                }
+            if role.kind.match_user(&user) && role.permissions.contains(&perm) {
+                return true;
             }
         }
-        allowed
+        false
     }
 
     /// Returns if given proposal kind is token weighted.

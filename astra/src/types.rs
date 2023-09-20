@@ -60,9 +60,9 @@ pub enum Action {
     Finalize,
     /// Move a proposal to the hub to shift into another DAO.
     MoveToHub,
-    /// Veto hook for house
+    /// Veto hook
     VetoProposal,
-    /// Dissovle hook for house
+    /// Dissovle hook
     Dissolve,
 }
 

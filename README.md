@@ -226,9 +226,7 @@ near view $ASTRA_ID get_policy
 
 - A role with: `["*:*"]` has _unlimited_ permission. Normally, the `council` role has `*:*` as its permission so they can perform _any_ vote action on _any_ kind of proposal.
 
-- A role with: `["VetoProposal"]` can perform veto action on any proposal.
-
-- A role with: `["Dissolve"]` can dissolve this DAO.
+- A role with: `"VetoProposal"` or `"Dissolve"` can perform veto proposal and dissolve DAO actions.
 
 **Here is a list of actions:**
 
@@ -239,8 +237,8 @@ near view $ASTRA_ID get_policy
 - `VoteRemove` - _Votes to remove given proposal or bounty (this may be because the proposal is spam or otherwise invalid)._
 - `Finalize` - _Finalizes proposal which is cancelled when proposal has expired (this action also returns funds)._
 - `MoveToHub` - _Moves a proposal to the hub (this is used to move a proposal into another DAO)._
-- `VetoProposal` - Veto for house: House with Veto permission can veto any proposal in this DAO
-- `Dissolve` - Dissolve for house: House with dissolve permission can dissolve this DAO
+- `VetoProposal` - Veto a proposal. Veto is instant, it will `reject` the proposal and return bond.
+- `Dissolve` - Dissolve this DAO: remove all members of the DAO, and sending the remaining funds back to the trust.
 
 ---
 

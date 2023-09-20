@@ -82,7 +82,7 @@ pub struct Contract {
     /// Large blob storage.
     pub blobs: LookupMap<CryptoHash, AccountId>,
 
-    /// Trust address
+    /// AccountId which is a recipient of DAO funds in case the DAO will dissolve.
     pub trust: AccountId,
 }
 
@@ -167,11 +167,9 @@ impl Contract {
             let proposal: Proposal = prop.into();
             match proposal.status {
                 ProposalStatus::InProgress | ProposalStatus::Failed => {
-                    // Remove the proposal if it's in progress or failed
                     self.proposals.remove(&id);
                 }
                 _ => {
-                    // Panic if the proposal is finalized
                     panic!("Proposal finalized");
                 }
             }

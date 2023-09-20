@@ -18,6 +18,7 @@ pub use crate::proposals::{Proposal, ProposalInput, ProposalKind, ProposalStatus
 pub use crate::types::{Action, Config, OldAccountId, OLD_BASE_TOKEN};
 use crate::upgrade::{internal_get_factory_info, internal_set_factory_info, FactoryInfo};
 pub use crate::views::{BountyOutput, ProposalOutput};
+use events::{emit_dissolve, emit_veto};
 
 mod bounties;
 mod delegation;
@@ -25,6 +26,7 @@ mod policy;
 mod proposals;
 mod types;
 mod upgrade;
+mod events;
 pub mod views;
 #[cfg(test)]
 pub mod test_utils;
@@ -171,6 +173,7 @@ impl Contract {
                 panic!("Proposal finalized");
             }
         }
+        emit_veto(id)
     }
 
     /// Dissolves the DAO by removing all members, closing all active proposals and returning bonds.
@@ -190,6 +193,7 @@ impl Contract {
 
         let funds = env::account_balance() - self.locked_amount;
         Promise::new(self.trust.clone()).transfer(funds);
+        emit_dissolve();
     }
 
     pub fn finalize_dissolve(&mut self, from_prop: u64, limit: u64) {

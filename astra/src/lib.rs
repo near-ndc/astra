@@ -162,20 +162,15 @@ impl Contract {
         assert!(res, "not authorized");
 
         // Check if the proposal exist and is not finalized
-        if let Some(prop) = self.proposals.get(&id) {
-            let proposal: Proposal = prop.into();
-            match proposal.status {
-                ProposalStatus::InProgress | ProposalStatus::Failed => {
-                    self.proposals.remove(&id);
-                }
-                _ => {
-                    panic!("Proposal finalized");
-                }
+        let proposal = self.assert_proposal(&id);
+        match proposal.status {
+            ProposalStatus::InProgress | ProposalStatus::Failed => {
+                self.proposals.remove(&id);
             }
-        } else {
-            panic!("proposal does not exist");
+            _ => {
+                panic!("Proposal finalized");
+            }
         }
-       
     }
 
     /// Dissolves the DAO by removing all members, closing all active proposals and returning bonds.
@@ -218,6 +213,10 @@ impl Contract {
 
     fn assert_policy(&self) -> Policy {
         self.policy.get().expect("policy not found").to_policy()
+    }
+
+    fn assert_proposal(&self, id: &u64) -> Proposal {
+        self.proposals.get(id).expect("proposal does not exist").into()
     }
 }
 

@@ -484,6 +484,9 @@ impl Contract {
     /// Add proposal to this DAO.
     #[payable]
     pub fn add_proposal(&mut self, proposal: ProposalInput) -> u64 {
+        if self.status == ContractStatus::Dissolved {
+            panic!("Cannot perform this action, dao is dissolved!");
+        }
         // 0. validate bond attached.
         // TODO: consider bond in the token of this DAO.
         let policy = self.policy.get().unwrap().to_policy();

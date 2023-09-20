@@ -512,7 +512,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "ERR_PERMISSION_DENIED")]
+    #[should_panic(expected = "Cannot perform this action, dao is dissolved!")]
     fn test_dissolve() {
         let (mut context, mut contract, id)= setup_ctr();
         assert_eq!(contract.get_proposal(id).id, id);

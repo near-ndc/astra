@@ -7,6 +7,7 @@ use near_sdk::{
     PanicOnDefault, Promise, PromiseResult, PromiseOrValue,
 };
 use policy::UserInfo;
+use types::ContractStatus;
 
 pub use crate::bounties::{Bounty, BountyClaim, VersionedBounty};
 pub use crate::policy::{
@@ -84,6 +85,9 @@ pub struct Contract {
 
     /// AccountId which is a recipient of DAO funds in case the DAO will dissolve.
     pub trust: AccountId,
+
+    /// Contract status, it could active or dissolved
+    pub status: ContractStatus,
 }
 
 #[near_bindgen]
@@ -105,6 +109,7 @@ impl Contract {
             blobs: LookupMap::new(StorageKeys::Blobs),
             locked_amount: 0,
             trust,
+            status: ContractStatus::Active
         };
         internal_set_factory_info(&FactoryInfo {
             factory_id: env::predecessor_account_id(),
@@ -196,20 +201,33 @@ impl Contract {
             panic!("policy not found!")
         }
 
+        self.status = ContractStatus::Dissolved;
+        policy.roles = vec![];
+        self.policy.set(&VersionedPolicy::Current(policy));
+
+        let funds = env::account_balance() - self.locked_amount;
+        Promise::new(self.trust.clone()).transfer(funds);
+    }
+
+    pub fn finalize_dissolve(&mut self, from_prop: u64, limit: u64) {
+        let policy;
+        if let Some(pol) = self.policy.get() {
+            policy = pol.to_policy();
+        } else {
+            panic!("policy not found!")
+        }
+
+        if self.status == ContractStatus::Active {
+            panic!("cannot clear proposals, DAO is in active state!")
+        }
         // Return bond amounts
-        for prop_id in 0..self.last_proposal_id {
+        for prop_id in from_prop..(from_prop+limit) {
             let prop: Proposal = self.proposals.get(&prop_id).unwrap().into();
             if prop.status == ProposalStatus::InProgress {
                 self.internal_return_bonds(&policy, &prop);
             }
             self.proposals.remove(&prop_id);
         }
-
-        policy.roles = vec![];
-        self.policy.set(&VersionedPolicy::Current(policy));
-
-        let funds = env::account_balance() - self.locked_amount;
-        Promise::new(self.trust.clone()).transfer(funds);
     }
 }
 
@@ -281,8 +299,8 @@ mod tests {
             roles: vec![
                 RolePermission {
                     name: "council".to_string(),
-                    kind: RoleKind::Group(vec![council_member_1(), council_member_2(),
-                        council_member_3(), council_member_4()].into_iter().collect()),
+                    kind: RoleKind::Group(vec![council(1), council(2),
+                        council(3), council(4)].into_iter().collect()),
                     // All actions except RemoveProposal are allowed by council.
                     permissions: vec![
                         "*:AddProposal".to_string(),
@@ -331,7 +349,7 @@ mod tests {
             policy::VersionedPolicy::Current(house_policy()),
             ndc_trust()
         );
-        testing_env!(context.predecessor_account_id(council_member_1()).build());
+        testing_env!(context.predecessor_account_id(council(1)).build());
         let id = create_proposal(&mut context, &mut contract);
         (context.build(), contract, id)
     } 
@@ -521,7 +539,7 @@ mod tests {
         res = contract.policy.get().unwrap().to_policy();
         assert!(res.roles.is_empty());
 
-        context.predecessor_account_id = council_member_1();
+        context.predecessor_account_id = council(1);
         context.attached_deposit = parse_near!("1 N");
         testing_env!(context);
 
@@ -543,15 +561,15 @@ mod tests {
         assert_eq!(contract.get_proposal(id).id, id);
 
         // Other members vote
-        context.predecessor_account_id = council_member_2();
+        context.predecessor_account_id = council(2);
         testing_env!(context.clone());
         contract.act_proposal(id, Action::VoteApprove, Some("vote on prosposal".to_string()));
-        assert!(contract.get_proposal(id).proposal.votes.contains_key(&council_member_2()));
+        assert!(contract.get_proposal(id).proposal.votes.contains_key(&council(2)));
 
-        context.predecessor_account_id = council_member_3();
+        context.predecessor_account_id = council(3);
         testing_env!(context.clone());
         contract.act_proposal(id, Action::VoteReject, Some("vote on prosposal".to_string()));
-        assert!(contract.get_proposal(id).proposal.votes.contains_key(&council_member_3()));
+        assert!(contract.get_proposal(id).proposal.votes.contains_key(&council(3)));
 
         // Voting body vetos
         context.predecessor_account_id = council_of_advisors();
@@ -559,7 +577,7 @@ mod tests {
         contract.veto(id);
 
         // no more members should be able to vote
-        context.predecessor_account_id = council_member_4();
+        context.predecessor_account_id = council(4);
         testing_env!(context);
         contract.act_proposal(id, Action::VoteApprove, Some("vote on prosposal".to_string()));
     }

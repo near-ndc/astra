@@ -198,11 +198,10 @@ impl Contract {
     }
 
     pub fn finalize_dissolve(&mut self, from_prop: u64, limit: u64) {
-        let policy = self.assert_policy();
-
         if self.status == ContractStatus::Active {
             panic!("cannot clear proposals, DAO is in active state!")
         }
+        let policy = self.assert_policy();
         // Return bond amounts
         for prop_id in from_prop..(from_prop+limit) {
             if let Some(prop) = self.proposals.get(&prop_id) {

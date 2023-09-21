@@ -570,7 +570,7 @@ impl Contract {
                     // Updates proposal status with new votes using the policy.
                     proposal.status =
                     policy.proposal_status(&proposal, roles, self.total_delegation_amount);
-                    if proposal.status == ProposalStatus::Approved && execute {
+                    if proposal.status == ProposalStatus::Approved {
                         self.internal_execute_proposal(&policy, &proposal, id);
                         true
                     } else if proposal.status == ProposalStatus::Removed && execute {
@@ -615,7 +615,7 @@ impl Contract {
                 true
             }
             Action::MoveToHub => false,
-            Action::ExecuteProposal => {
+            Action::Execute => {
                 // Note: If proposal was executed already `proposal_status` will throw error
                 proposal.status = policy.proposal_status(&proposal, roles, self.total_delegation_amount);
                 let mut update = true;

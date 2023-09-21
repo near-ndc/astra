@@ -286,7 +286,7 @@ impl Contract {
         }
     }
 
-    fn internal_return_bonds(&mut self, policy: &Policy, proposal: &Proposal) -> Promise {
+    pub(crate) fn internal_return_bonds(&mut self, policy: &Policy, proposal: &Proposal) -> Promise {
         match &proposal.kind {
             ProposalKind::BountyDone { .. } => {
                 self.locked_amount -= policy.bounty_bond.0;
@@ -485,6 +485,9 @@ impl Contract {
     /// Add proposal to this DAO.
     #[payable]
     pub fn add_proposal(&mut self, proposal: ProposalInput) -> u64 {
+        if self.status == ContractStatus::Dissolved {
+            panic!("Cannot perform this action, dao is dissolved!");
+        }
         // 0. validate bond attached.
         // TODO: consider bond in the token of this DAO.
         let policy = self.policy.get().unwrap().to_policy();
@@ -538,8 +541,15 @@ impl Contract {
 
     /// Act on given proposal by id, if permissions allow.
     /// Memo is logged but not stored in the state. Can be used to leave notes or explain the action.
+<<<<<<< HEAD
     pub fn act_proposal(&mut self, id: u64, action: Action, memo: Option<String>, skip_execution: Option<bool>) {
         let execute = !skip_execution.unwrap_or(true);
+=======
+    pub fn act_proposal(&mut self, id: u64, action: Action, memo: Option<String>) {
+        if self.status == ContractStatus::Dissolved {
+            panic!("Cannot perform this action, dao is dissolved!")
+        }
+>>>>>>> c5fac1d2368e58353dbf6ee3520886889121b9c2
         let mut proposal: Proposal = self.proposals.get(&id).expect("ERR_NO_PROPOSAL").into();
         let policy = self.policy.get().unwrap().to_policy();
         // Check permissions for the given action.
@@ -629,7 +639,10 @@ impl Contract {
                     }
                 }
                 true
-            }
+            },
+            Action::VetoProposal => panic!("Operation not allowed"),
+            Action::Dissolve => panic!("Operation not allowed"),
+
         };
         if update {
             self.proposals

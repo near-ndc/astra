@@ -356,6 +356,21 @@ impl Policy {
         (allowed_roles, allowed)
     }
 
+    /// Can given house execute given action on this dao.
+    pub fn can_execute_hook(
+        &self,
+        user: UserInfo,
+        action: &Action,
+    ) -> bool {
+        let perm = action.to_policy_label();
+        for role in self.roles.iter() {
+            if role.kind.match_user(&user) && role.permissions.contains(&perm) {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Returns if given proposal kind is token weighted.
     pub fn is_token_weighted(&self, role: &String, proposal_kind_label: &String) -> bool {
         let role_info = self.internal_get_role(role).expect("ERR_ROLE_NOT_FOUND");

@@ -22,7 +22,7 @@ pub(crate) fn emit_veto(prop_id: u64) {
 pub(crate) fn emit_dissolve() {
     emit_event(EventPayload {
         event: "dissolve",
-        data: "dao is dissolved",
+        data: "",
     })
 }
 

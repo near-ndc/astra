@@ -135,6 +135,7 @@ Confirm the default policy acts as it should.
   },
   "proposal_bond": "1000000000000000000000000",
   "proposal_period": "604800000000000",
+  "cooldown": "0",
   "bounty_bond": "1000000000000000000000000",
   "bounty_forgiveness_period": "86400000000000"
 }
@@ -194,6 +195,7 @@ Each
   },
   "proposal_bond": "1000000000000000000000000",
   "proposal_period": "604800000000000",
+  "cooldown": "0",
   "bounty_bond": "1000000000000000000000000",
   "bounty_forgiveness_period": "86400000000000"
 }
@@ -253,6 +255,7 @@ Each
   },
   "proposal_bond": "1000000000000000000000000",
   "proposal_period": "604800000000000",
+  "cooldown": "0",
   "bounty_bond": "1000000000000000000000000",
   "bounty_forgiveness_period": "86400000000000"
 }
@@ -312,6 +315,7 @@ Each
   },
   "proposal_bond": "1000000000000000000000000",
   "proposal_period": "604800000000000",
+  "cooldown": "0",
   "bounty_bond": "1000000000000000000000000",
   "bounty_forgiveness_period": "86400000000000"
 }
@@ -371,6 +375,7 @@ Each
   },
   "proposal_bond": "1000000000000000000000000",
   "proposal_period": "604800000000000",
+  "cooldown": "0",
   "bounty_bond": "1000000000000000000000000",
   "bounty_forgiveness_period": "86400000000000"
 }
@@ -446,6 +451,7 @@ Each group council can have different threshold criteria for consensus. Confirm 
   },
   "proposal_bond": "1000000000000000000000000",
   "proposal_period": "604800000000000",
+  "cooldown": "0",
   "bounty_bond": "1000000000000000000000000",
   "bounty_forgiveness_period": "86400000000000"
 }

@@ -154,6 +154,8 @@ pub struct Policy {
     pub proposal_bond: U128,
     /// Expiration period for proposals.
     pub proposal_period: U64,
+    /// Proposal can be executed only after cooldown period is complete( in milliseconds )
+    pub cooldown: U64,
     /// Bond for claiming a bounty.
     pub bounty_bond: U128,
     /// Period in which giving up on bounty is not punished.
@@ -204,6 +206,7 @@ pub fn default_policy(council: Vec<AccountId>) -> Policy {
         default_vote_policy: VotePolicy::default(),
         proposal_bond: U128(10u128.pow(24)),
         proposal_period: U64::from(1_000_000_000 * 60 * 60 * 24 * 7),
+        cooldown: U64::from(0),
         bounty_bond: U128(10u128.pow(24)),
         bounty_forgiveness_period: U64::from(1_000_000_000 * 60 * 60 * 24),
     }
@@ -273,6 +276,9 @@ impl Policy {
         }
         if parameters.proposal_period.is_some() {
             self.proposal_period = parameters.proposal_period.unwrap();
+        }
+        if parameters.cooldown.is_some() {
+            self.cooldown = parameters.cooldown.unwrap();
         }
         if parameters.bounty_bond.is_some() {
             self.bounty_bond = parameters.bounty_bond.unwrap();
@@ -616,6 +622,7 @@ mod tests {
             proposal_bond: Some(U128(10u128.pow(26))),
             proposal_period: None,
             bounty_bond: None,
+            cooldown: None,
             bounty_forgiveness_period: Some(U64::from(1_000_000_000 * 60 * 60 * 24 * 5)),
         };
         policy.update_parameters(&new_parameters);

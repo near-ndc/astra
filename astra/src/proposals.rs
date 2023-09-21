@@ -52,6 +52,7 @@ pub struct ActionCall {
 pub struct PolicyParameters {
     pub proposal_bond: Option<U128>,
     pub proposal_period: Option<U64>,
+    pub cooldown: Option<U64>,
     pub bounty_bond: Option<U128>,
     pub bounty_forgiveness_period: Option<U64>,
 }

@@ -173,7 +173,7 @@ export ASTRA_ID=genesis.$CONTRACT_ID
 near view $ASTRA_ID get_policy
 ```
 
-- Verify that the name, purpose, metadata, and council are all configured correctly. Also note the following default values:
+- Verify that the name, purpose, metadata, and council are all configured correctly. Also note the following default values for roles and permissions:
 
 ```json
 {
@@ -181,7 +181,7 @@ near view $ASTRA_ID get_policy
     {
       "name": "all",
       "kind": "Everyone",
-      "permissions": ["*:AddProposal"],
+      "permissions": ["*:AddProposal", "*:Execute"],
       "vote_policy": {}
     },
     {
@@ -237,6 +237,7 @@ near view $ASTRA_ID get_policy
 - `VoteRemove` - _Votes to remove given proposal or bounty (this may be because the proposal is spam or otherwise invalid)._
 - `Finalize` - _Finalizes proposal which is cancelled when proposal has expired (this action also returns funds)._
 - `MoveToHub` - _Moves a proposal to the hub (this is used to move a proposal into another DAO)._
+- `Execute` - Execute a proposal if it was not executed in final vote.
 - `VetoProposal` - Veto a proposal. Veto is instant, it will `reject` the proposal and return bond.
 - `Dissolve` - Dissolve this DAO: remove all members of the DAO, and sending the remaining funds back to the trust.
 

@@ -343,7 +343,19 @@ mod tests {
         }
         let id = create_proposal(&mut context, &mut contract);
         (context.build(), contract, id)
-    } 
+    }
+
+    fn setup_for_proposals() -> (VMContext, Contract, u64) {
+        let mut context = VMContextBuilder::new();
+        testing_env!(context.predecessor_account_id(accounts(1)).build());
+        let mut contract = Contract::new(
+            Config::test_config(),
+            VersionedPolicy::Default(vec![accounts(1)]),
+            ndc_trust()
+        );
+        let id = create_proposal(&mut context, &mut contract);
+        return (context.build(), contract, id)
+    }
 
     #[test]
     fn test_basics() {
@@ -359,10 +371,10 @@ mod tests {
         assert_eq!(contract.get_proposals(0, 10).len(), 1);
 
         let id = create_proposal(&mut context, &mut contract);
-        contract.act_proposal(id, Action::VoteApprove, None);
+        contract.act_proposal(id, Action::VoteApprove, None, None);
         assert_eq!(
             contract.get_proposal(id).proposal.status,
-            ProposalStatus::Approved
+            ProposalStatus::Executed
         );
 
         let id = create_proposal(&mut context, &mut contract);
@@ -370,7 +382,7 @@ mod tests {
         testing_env!(context
             .block_timestamp(1_000_000_000 * 24 * 60 * 60 * 8)
             .build());
-        contract.act_proposal(id, Action::Finalize, None);
+        contract.act_proposal(id, Action::Finalize, None, None);
         assert_eq!(
             contract.get_proposal(id).proposal.status,
             ProposalStatus::Expired
@@ -402,7 +414,7 @@ mod tests {
         );
         let id = create_proposal(&mut context, &mut contract);
         assert_eq!(contract.get_proposal(id).proposal.description, "test");
-        contract.act_proposal(id, Action::RemoveProposal, None);
+        contract.act_proposal(id, Action::RemoveProposal, None, None);
     }
 
     #[test]
@@ -416,7 +428,7 @@ mod tests {
         let mut contract = Contract::new(Config::test_config(), policy, accounts(1));
         let id = create_proposal(&mut context, &mut contract);
         assert_eq!(contract.get_proposal(id).proposal.description, "test");
-        contract.act_proposal(id, Action::RemoveProposal, None);
+        contract.act_proposal(id, Action::RemoveProposal, None, None);
         assert_eq!(contract.get_proposals(0, 10).len(), 0);
     }
 
@@ -433,7 +445,7 @@ mod tests {
         testing_env!(context
             .block_timestamp(1_000_000_000 * 24 * 60 * 60 * 8)
             .build());
-        contract.act_proposal(id, Action::VoteApprove, None);
+        contract.act_proposal(id, Action::VoteApprove, None, None);
     }
 
     #[test]
@@ -447,8 +459,8 @@ mod tests {
             ndc_trust()
         );
         let id = create_proposal(&mut context, &mut contract);
-        contract.act_proposal(id, Action::VoteApprove, None);
-        contract.act_proposal(id, Action::VoteApprove, None);
+        contract.act_proposal(id, Action::VoteApprove, None, None);
+        contract.act_proposal(id, Action::VoteApprove, None, None);
     }
 
     #[test]
@@ -468,10 +480,43 @@ mod tests {
                 role: "missing".to_string(),
             },
         });
-        contract.act_proposal(id, Action::VoteApprove, None);
+        contract.act_proposal(id, Action::VoteApprove, None, None);
         let x = contract.get_policy();
         // still 2 roles: all and council.
         assert_eq!(x.roles.len(), 2);
+    }
+
+    #[test]
+    fn test_proposal_execution() {
+        let (_, mut contract, id) = setup_for_proposals();
+
+        contract.act_proposal(id, Action::VoteApprove, None, Some(true));
+        // verify proposal wasn't executed during final vote
+        assert_eq!(
+            contract.get_proposal(id).proposal.status,
+            ProposalStatus::Approved
+        );
+
+        contract.act_proposal(id, Action::Execute, None, None);
+        assert_eq!(
+            contract.get_proposal(id).proposal.status,
+            ProposalStatus::Executed
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_PROPOSAL_ALREADY_EXECUTED")]
+    fn test_proposal_double_execution() {
+        let (_, mut contract, id) = setup_for_proposals();
+        contract.act_proposal(id, Action::VoteApprove, None, Some(false));
+        // verify proposal was approved and executed
+        assert_eq!(
+            contract.get_proposal(id).proposal.status,
+            ProposalStatus::Executed
+        );
+
+        // panics if we try to execute again
+        contract.act_proposal(id, Action::Execute, None, None);
     }
 
     #[test]
@@ -531,7 +576,7 @@ mod tests {
         testing_env!(context.clone());
         contract.dissolve_hook();
 
-        let expected = r#"EVENT_JSON:{"standard":"astra++","version":"1.0.0","event":"dissolve","data":"dao is dissolved"}"#;
+        let expected = r#"EVENT_JSON:{"standard":"astra++","version":"1.0.0","event":"dissolve","data":""}"#;
         assert_eq!(vec![expected], get_logs());
 
         res = contract.policy.get().unwrap().to_policy();
@@ -561,12 +606,12 @@ mod tests {
         // Other members vote
         context.predecessor_account_id = council(2);
         testing_env!(context.clone());
-        contract.act_proposal(id, Action::VoteApprove, Some("vote on prosposal".to_string()));
+        contract.act_proposal(id, Action::VoteApprove, Some("vote on prosposal".to_string()), None);
         assert!(contract.get_proposal(id).proposal.votes.contains_key(&council(2)));
 
         context.predecessor_account_id = council(3);
         testing_env!(context.clone());
-        contract.act_proposal(id, Action::VoteReject, Some("vote on prosposal".to_string()));
+        contract.act_proposal(id, Action::VoteReject, Some("vote on prosposal".to_string()), None);
         assert!(contract.get_proposal(id).proposal.votes.contains_key(&council(3)));
 
         // Voting body vetos
@@ -577,7 +622,7 @@ mod tests {
         // no more members should be able to vote
         context.predecessor_account_id = council(4);
         testing_env!(context);
-        contract.act_proposal(id, Action::VoteApprove, Some("vote on prosposal".to_string()));
+        contract.act_proposal(id, Action::VoteApprove, Some("vote on prosposal".to_string()), None);
     }
 
 

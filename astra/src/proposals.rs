@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use near_contract_standards::fungible_token::core::ext_ft_core;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::{Base64VecU8, U128, U64};
-use near_sdk::{log, AccountId, Balance, Gas, PromiseOrValue};
+use near_sdk::{log, AccountId, Balance, Gas, PromiseOrValue, require};
 
 use crate::policy::UserInfo;
 use crate::types::{
@@ -31,6 +31,7 @@ pub enum ProposalStatus {
     Moved,
     /// If proposal has failed when finalizing. Allowed to re-finalize again to either expire or approved.
     Failed,
+    Executed,
 }
 
 /// Function call arguments.
@@ -540,10 +541,11 @@ impl Contract {
 
     /// Act on given proposal by id, if permissions allow.
     /// Memo is logged but not stored in the state. Can be used to leave notes or explain the action.
-    pub fn act_proposal(&mut self, id: u64, action: Action, memo: Option<String>) {
+    pub fn act_proposal(&mut self, id: u64, action: Action, memo: Option<String>, skip_execution: Option<bool>) {
         if self.status == ContractStatus::Dissolved {
             panic!("Cannot perform this action, dao is dissolved!")
         }
+        let execute = !skip_execution.unwrap_or(false);
         let mut proposal: Proposal = self.proposals.get(&id).expect("ERR_NO_PROPOSAL").into();
         let policy = self.policy.get().unwrap().to_policy();
         // Check permissions for the given action.
@@ -570,11 +572,13 @@ impl Contract {
                     &policy,
                     self.get_user_weight(&sender_id),
                 );
+                
                 // Updates proposal status with new votes using the policy.
                 proposal.status =
                     policy.proposal_status(&proposal, roles, self.total_delegation_amount);
-                if proposal.status == ProposalStatus::Approved {
+                if proposal.status == ProposalStatus::Approved && execute {
                     self.internal_execute_proposal(&policy, &proposal, id);
+                    proposal.status = ProposalStatus::Executed;
                     true
                 } else if proposal.status == ProposalStatus::Removed {
                     self.internal_reject_proposal(&policy, &proposal, false);
@@ -604,6 +608,7 @@ impl Contract {
                 match proposal.status {
                     ProposalStatus::Approved => {
                         self.internal_execute_proposal(&policy, &proposal, id);
+                        proposal.status = ProposalStatus::Executed;
                     }
                     ProposalStatus::Expired => {
                         self.internal_reject_proposal(&policy, &proposal, true);
@@ -615,8 +620,19 @@ impl Contract {
                 true
             }
             Action::MoveToHub => false,
+            Action::Execute => {
+                require!(proposal.status != ProposalStatus::Executed, "ERR_PROPOSAL_ALREADY_EXECUTED");
+                // recompute status to check if the proposal is not expired.
+                proposal.status = policy.proposal_status(&proposal, roles, self.total_delegation_amount);
+                require!(proposal.status == ProposalStatus::Approved, "ERR_PROPOSAL_NOT_APPROVED");
+
+                self.internal_execute_proposal(&policy, &proposal, id);
+                proposal.status = ProposalStatus::Executed;
+                true
+            },
             Action::VetoProposal => panic!("Operation not allowed"),
             Action::Dissolve => panic!("Operation not allowed"),
+
         };
         if update {
             self.proposals

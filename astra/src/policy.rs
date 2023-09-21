@@ -182,7 +182,7 @@ pub fn default_policy(council: Vec<AccountId>) -> Policy {
             RolePermission {
                 name: "all".to_string(),
                 kind: RoleKind::Everyone,
-                permissions: vec!["*:AddProposal".to_string()].into_iter().collect(),
+                permissions: vec!["*:AddProposal".to_string(), "*:Execute".to_string()].into_iter().collect(),
                 vote_policy: HashMap::default(),
             },
             RolePermission {
@@ -400,7 +400,7 @@ impl Policy {
         assert!(
             matches!(
                 proposal.status,
-                ProposalStatus::InProgress | ProposalStatus::Failed
+                ProposalStatus::InProgress | ProposalStatus::Failed | ProposalStatus::Approved
             ),
             "ERR_PROPOSAL_NOT_IN_PROGRESS"
         );

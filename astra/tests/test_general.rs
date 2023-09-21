@@ -344,7 +344,7 @@ async fn proposal_tests() -> anyhow::Result<()> {
     let prop: Proposal = dao.call("get_proposal").args_json(json!({"id": 1})).view().await?.json()?;
     assert_eq!(
         prop.status,
-        ProposalStatus::Approved
+        ProposalStatus::Executed
     );
 
     Ok(())
@@ -372,14 +372,14 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
     // Voting by user who is not a member should fail.
     let res = user2.clone()
         .call(dao.id(), "act_proposal")
-        .args_json(json!({"id": 0, "action": Action::VoteApprove}))
+        .args_json(json!({"id": 0, "action": Action::VoteApprove, "skip_execution": false}))
         .max_gas()
         .transact()
         .await?;
     assert!(res.is_failure(), "{:?}", res);
     let res = root.clone()
         .call(dao.id(), "act_proposal")
-        .args_json(json!({"id": 0, "action": Action::VoteApprove}))
+        .args_json(json!({"id": 0, "action": Action::VoteApprove, "skip_execution": false}))
         .max_gas()
         .transact()
         .await?;
@@ -387,7 +387,7 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
     // Voting second time on the same proposal should fail.
     let res = root.clone()
         .call(dao.id(), "act_proposal")
-        .args_json(json!({"id": 0, "action": Action::VoteApprove}))
+        .args_json(json!({"id": 0, "action": Action::VoteApprove, "skip_execution": false}))
         .max_gas()
         .transact()
         .await?;
@@ -436,7 +436,7 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
     let prop: Proposal = dao.call("get_proposal").args_json(json!({"id": 2})).view().await?.json()?;
     assert_eq!(
         prop.status,
-        ProposalStatus::Approved
+        ProposalStatus::Executed
     );
 
     let supply: U128 = staking.call("ft_total_supply").view().await?.json()?;

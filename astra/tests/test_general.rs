@@ -436,7 +436,7 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
     let prop: Proposal = dao.call("get_proposal").args_json(json!({"id": 2})).view().await?.json()?;
     assert_eq!(
         prop.status,
-        ProposalStatus::Approved
+        ProposalStatus::Executed
     );
 
     let supply: U128 = staking.call("ft_total_supply").view().await?.json()?;

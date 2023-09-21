@@ -140,7 +140,7 @@ pub async fn vote(users: Vec<Account>, dao: &Contract, proposal_id: u64) -> anyh
     for user in users.into_iter() {
         let res = user
             .call(dao.id(), "act_proposal")
-            .args_json(json!({"id": proposal_id, "action": Action::VoteApprove, "skip_execution": false}))
+            .args_json(json!({"id": proposal_id, "action": Action::VoteApprove}))
             .max_gas()
             .transact()
             .await?;

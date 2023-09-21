@@ -18,6 +18,7 @@ pub use crate::proposals::{Proposal, ProposalInput, ProposalKind, ProposalStatus
 pub use crate::types::{Action, Config, OldAccountId, OLD_BASE_TOKEN};
 use crate::upgrade::{internal_get_factory_info, internal_set_factory_info, FactoryInfo};
 pub use crate::views::{BountyOutput, ProposalOutput};
+use events::{emit_dissolve, emit_veto};
 
 mod bounties;
 mod delegation;
@@ -25,6 +26,7 @@ mod policy;
 mod proposals;
 mod types;
 mod upgrade;
+mod events;
 pub mod views;
 #[cfg(test)]
 pub mod test_utils;
@@ -171,6 +173,7 @@ impl Contract {
                 panic!("Proposal finalized");
             }
         }
+        emit_veto(id)
     }
 
     /// Dissolves the DAO by removing all members, closing all active proposals and returning bonds.
@@ -190,6 +193,7 @@ impl Contract {
 
         let funds = env::account_balance() - self.locked_amount;
         Promise::new(self.trust.clone()).transfer(funds);
+        emit_dissolve();
     }
 
     pub fn finalize_dissolve(&mut self, from_prop: u64, limit: u64) {
@@ -257,7 +261,7 @@ mod tests {
     use std::collections::{HashMap};
 
     use near_sdk::json_types::U64;
-    use near_sdk::test_utils::{accounts, VMContextBuilder};
+    use near_sdk::test_utils::{accounts, VMContextBuilder, get_logs};
     use near_sdk::{testing_env, VMContext};
     use near_units::parse_near;
 
@@ -544,6 +548,9 @@ mod tests {
         testing_env!(context);
         contract.veto_hook(id);
 
+        let expected = r#"EVENT_JSON:{"standard":"astra++","version":"1.0.0","event":"veto","data":{"prop_id":4}}"#;
+        assert_eq!(vec![expected], get_logs());
+
         contract.get_proposal(id);
         // TODO: this should not panic, instead return NONE
     }
@@ -568,6 +575,10 @@ mod tests {
         context.predecessor_account_id = acc_voting_body();
         testing_env!(context.clone());
         contract.dissolve_hook();
+
+        let expected = r#"EVENT_JSON:{"standard":"astra++","version":"1.0.0","event":"dissolve","data":"dao is dissolved"}"#;
+        assert_eq!(vec![expected], get_logs());
+
         res = contract.policy.get().unwrap().to_policy();
         assert!(res.roles.is_empty());
 

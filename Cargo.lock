@@ -74,10 +74,12 @@ dependencies = [
  "anyhow",
  "astra-factory",
  "astra-staking",
+ "common",
  "hex 0.4.3",
  "near-contract-standards",
  "near-sdk",
  "near-units",
+ "serde_json",
  "serde_with",
  "test-token",
  "tokio",
@@ -479,6 +481,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "12f8e7987cbd042a63249497f41aed09f8e65add917ea6566effbc56578d6801"
 dependencies = [
  "generic-array",
+]
+
+[[package]]
+name = "common"
+version = "1.0.0"
+dependencies = [
+ "near-sdk",
+ "serde_json",
+ "uint",
 ]
 
 [[package]]
@@ -2924,9 +2935,9 @@ checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
 
 [[package]]
 name = "uint"
-version = "0.9.3"
+version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12f03af7ccf01dd611cc450a0d10dbc9b745770d096473e2faf0ca6e2d66d1e0"
+checksum = "76f64bba2c53b04fcab63c01a7d7427eadc821e3bc48c34dc9ba29c501164b52"
 dependencies = [
  "byteorder",
  "crunchy",

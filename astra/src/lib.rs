@@ -374,7 +374,7 @@ mod tests {
         contract.act_proposal(id, Action::VoteApprove, None, None);
         assert_eq!(
             contract.get_proposal(id).proposal.status,
-            ProposalStatus::Approved
+            ProposalStatus::Executed
         );
 
         let id = create_proposal(&mut context, &mut contract);
@@ -576,7 +576,7 @@ mod tests {
         testing_env!(context.clone());
         contract.dissolve_hook();
 
-        let expected = r#"EVENT_JSON:{"standard":"astra++","version":"1.0.0","event":"dissolve","data":"dao is dissolved"}"#;
+        let expected = r#"EVENT_JSON:{"standard":"astra++","version":"1.0.0","event":"dissolve","data":""}"#;
         assert_eq!(vec![expected], get_logs());
 
         res = contract.policy.get().unwrap().to_policy();

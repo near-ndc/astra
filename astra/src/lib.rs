@@ -339,7 +339,19 @@ mod tests {
         }
         let id = create_proposal(&mut context, &mut contract);
         (context.build(), contract, id)
-    } 
+    }
+
+    fn setup_for_proposals() -> (VMContext, Contract, u64) {
+        let mut context = VMContextBuilder::new();
+        testing_env!(context.predecessor_account_id(accounts(1)).build());
+        let mut contract = Contract::new(
+            Config::test_config(),
+            VersionedPolicy::Default(vec![accounts(1)]),
+            ndc_trust()
+        );
+        let id = create_proposal(&mut context, &mut contract);
+        return (context.build(), contract, id)
+    }
 
     #[test]
     fn test_basics() {
@@ -472,15 +484,8 @@ mod tests {
 
     #[test]
     fn test_proposal_execution() {
-        let mut context = VMContextBuilder::new();
-        testing_env!(context.predecessor_account_id(accounts(1)).build());
-        let mut contract = Contract::new(
-            Config::test_config(),
-            VersionedPolicy::Default(vec![accounts(1)]),
-            ndc_trust()
-        );
+        let (_, mut contract, id) = setup_for_proposals();
 
-        let id = create_proposal(&mut context, &mut contract);
         contract.act_proposal(id, Action::VoteApprove, None, Some(true));
         // verify proposal wasn't executed during final vote
         assert_eq!(
@@ -498,15 +503,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "ERR_PROPOSAL_ALREADY_EXECUTED")]
     fn test_proposal_double_execution() {
-        let mut context = VMContextBuilder::new();
-        testing_env!(context.predecessor_account_id(accounts(1)).build());
-        let mut contract = Contract::new(
-            Config::test_config(),
-            VersionedPolicy::Default(vec![accounts(1)]),
-            ndc_trust()
-        );
-
-        let id = create_proposal(&mut context, &mut contract);
+        let (_, mut contract, id) = setup_for_proposals();
         contract.act_proposal(id, Action::VoteApprove, None, Some(false));
         // verify proposal was approved and executed
         assert_eq!(

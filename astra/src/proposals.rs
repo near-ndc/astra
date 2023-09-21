@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use near_contract_standards::fungible_token::core::ext_ft_core;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::{Base64VecU8, U128, U64};
-use near_sdk::{log, AccountId, Balance, Gas, PromiseOrValue};
+use near_sdk::{log, AccountId, Balance, Gas, PromiseOrValue, require};
 
 use crate::policy::UserInfo;
 use crate::types::{
@@ -621,18 +621,13 @@ impl Contract {
             }
             Action::MoveToHub => false,
             Action::Execute => {
-                require!(proposal.status == ProposalStatus::Executed, "ERR_PROPOSAL_ALREADY_EXECUTED");
+                require!(proposal.status != ProposalStatus::Executed, "ERR_PROPOSAL_ALREADY_EXECUTED");
                 // recompute status to check if the proposal is not expired.
                 proposal.status = policy.proposal_status(&proposal, roles, self.total_delegation_amount);
-                match proposal.status {
-                    ProposalStatus::Approved => {
-                        self.internal_execute_proposal(&policy, &proposal, id);
-                        proposal.status = ProposalStatus::Executed;
-                    }
-                    _ => {
-                        // do nothing
-                    }
-                }
+                require!(proposal.status == ProposalStatus::Approved, "ERR_PROPOSAL_NOT_APPROVED");
+
+                self.internal_execute_proposal(&policy, &proposal, id);
+                proposal.status = ProposalStatus::Executed;
                 true
             },
             Action::VetoProposal => panic!("Operation not allowed"),

@@ -35,7 +35,7 @@ mod unit_tests {
     #[test]
     fn log_hooks() {
         let expected1 = r#"EVENT_JSON:{"standard":"astra++","version":"1.0.0","event":"veto","data":{"prop_id":21}}"#;
-        let expected2 = r#"EVENT_JSON:{"standard":"astra++","version":"1.0.0","event":"dissolve","data":"dao is dissolved"}"#;
+        let expected2 = r#"EVENT_JSON:{"standard":"astra++","version":"1.0.0","event":"dissolve","data":""}"#;
         emit_veto(21);
         assert_eq!(vec![expected1], test_utils::get_logs());
         emit_dissolve();

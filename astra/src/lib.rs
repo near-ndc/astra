@@ -355,7 +355,7 @@ mod tests {
             ndc_trust()
         );
         let id = create_proposal(&mut context, &mut contract);
-        return (context.build(), contract, id)
+        (context.build(), contract, id)
     }
 
     #[test]
@@ -657,7 +657,7 @@ mod tests {
         assert!(!res.roles.is_empty());
 
         context.predecessor_account_id = acc_voting_body();
-        testing_env!(context.clone());
+        testing_env!(context);
         contract.dissolve_hook();
         res = contract.policy.get().unwrap().to_policy();
         assert!(res.roles.is_empty());

@@ -679,6 +679,6 @@ impl Contract {
         if env::block_timestamp_ms() > cooldown.0 + submission_time.0 {
             return true;
         }
-        return false;
+        false
     }
 }

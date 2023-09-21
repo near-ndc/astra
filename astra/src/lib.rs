@@ -265,7 +265,7 @@ mod tests {
     use near_sdk::{testing_env, VMContext};
     use near_units::parse_near;
 
-    use crate::proposals::ProposalStatus;
+    use crate::proposals::{ProposalStatus, PolicyParameters};
     use crate::test_utils::*;
 
     use super::*;
@@ -517,6 +517,27 @@ mod tests {
         );
 
         // panics if we try to execute again
+        contract.act_proposal(id, Action::Execute, None, None);
+    }
+
+    #[test]
+    #[should_panic(expected = "ERR_PROPOSAL_COOLDOWN_LEFT")]
+    fn test_cooldown() {
+        let (_, mut contract, id) = setup_for_proposals();
+        let mut policy = contract.policy.get().unwrap().to_policy();
+        policy.update_parameters(&PolicyParameters{
+            cooldown: Some(U64::from(1_000_000_000 * 60 * 60)), proposal_bond: None,
+            proposal_period: None, bounty_bond: None,
+            bounty_forgiveness_period: None 
+        });
+
+        contract.act_proposal(id, Action::VoteApprove, None, None);
+        // verify proposal wasn't executed during final vote
+        assert_eq!(
+            contract.get_proposal(id).proposal.status,
+            ProposalStatus::Approved
+        );
+
         contract.act_proposal(id, Action::Execute, None, None);
     }
 

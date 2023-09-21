@@ -546,9 +546,10 @@ impl Contract {
         if self.status == ContractStatus::Dissolved {
             panic!("Cannot perform this action, dao is dissolved!")
         }
-        let execute = !skip_execution.unwrap_or(false);
         let mut proposal: Proposal = self.proposals.get(&id).expect("ERR_NO_PROPOSAL").into();
         let policy = self.policy.get().unwrap().to_policy();
+
+        let execute = !skip_execution.unwrap_or(false) && self.assert_cooldown(proposal.submission_time, policy.cooldown);
         // Check permissions for the given action.
         let (roles, allowed) =
             policy.can_execute_action(self.internal_user_info(), &proposal.kind, &action);
@@ -623,6 +624,7 @@ impl Contract {
             Action::MoveToHub => false,
             Action::Execute => {
                 require!(proposal.status != ProposalStatus::Executed, "ERR_PROPOSAL_ALREADY_EXECUTED");
+                require!(self.assert_cooldown(proposal.submission_time, policy.cooldown), "ERR_PROPOSAL_COOLDOWN_LEFT");
                 // recompute status to check if the proposal is not expired.
                 proposal.status = policy.proposal_status(&proposal, roles, self.total_delegation_amount);
                 require!(proposal.status == ProposalStatus::Approved, "ERR_PROPOSAL_NOT_APPROVED");
@@ -668,5 +670,14 @@ impl Contract {
         self.proposals
             .insert(&proposal_id, &VersionedProposal::Default(proposal));
         result
+    }
+
+    /// Returns true if cooldown is over else false
+    #[private]
+    pub fn assert_cooldown(&mut self, submission_time: U64, cooldown: U64) -> bool {
+        if env::block_timestamp_ms() > cooldown.0 + submission_time.0 {
+            return true;
+        }
+        return false;
     }
 }

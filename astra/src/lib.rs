@@ -477,6 +477,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
+            ndc_trust()
         );
 
         let id = create_proposal(&mut context, &mut contract);
@@ -502,6 +503,7 @@ mod tests {
         let mut contract = Contract::new(
             Config::test_config(),
             VersionedPolicy::Default(vec![accounts(1)]),
+            ndc_trust()
         );
 
         let id = create_proposal(&mut context, &mut contract);
@@ -596,12 +598,12 @@ mod tests {
         // Other members vote
         context.predecessor_account_id = council(2);
         testing_env!(context.clone());
-        contract.act_proposal(id, Action::VoteApprove, Some("vote on prosposal".to_string()));
+        contract.act_proposal(id, Action::VoteApprove, Some("vote on prosposal".to_string()), None);
         assert!(contract.get_proposal(id).proposal.votes.contains_key(&council(2)));
 
         context.predecessor_account_id = council(3);
         testing_env!(context.clone());
-        contract.act_proposal(id, Action::VoteReject, Some("vote on prosposal".to_string()));
+        contract.act_proposal(id, Action::VoteReject, Some("vote on prosposal".to_string()), None);
         assert!(contract.get_proposal(id).proposal.votes.contains_key(&council(3)));
 
         // Voting body vetos
@@ -612,7 +614,7 @@ mod tests {
         // no more members should be able to vote
         context.predecessor_account_id = council(4);
         testing_env!(context);
-        contract.act_proposal(id, Action::VoteApprove, Some("vote on prosposal".to_string()));
+        contract.act_proposal(id, Action::VoteApprove, Some("vote on prosposal".to_string()), None);
     }
 
 

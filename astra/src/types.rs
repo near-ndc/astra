@@ -61,7 +61,7 @@ pub enum Action {
     /// Move a proposal to the hub to shift into another DAO.
     MoveToHub,
     /// Execute proposal and update proposal status
-    Execute
+    Execute,
     /// Veto hook
     VetoProposal,
     /// Dissovle hook

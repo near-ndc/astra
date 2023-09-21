@@ -229,7 +229,7 @@ mod tests {
             },
         });
         assert_eq!(contract.get_last_bounty_id(), id);
-        contract.act_proposal(id, Action::VoteApprove, None, None);
+        contract.act_proposal(id, Action::VoteApprove, None, Some(false));
         id
     }
 
@@ -269,7 +269,7 @@ mod tests {
             "bounty_done"
         );
 
-        contract.act_proposal(1, Action::VoteApprove, None, None);
+        contract.act_proposal(1, Action::VoteApprove, None, Some(false));
         testing_env!(
             context.build(),
             near_sdk::VMConfig::test(),

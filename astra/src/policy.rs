@@ -509,7 +509,6 @@ mod tests {
             "*:VoteReject".to_string(),
             "*:VoteRemove".to_string(),
             "*:Finalize".to_string(),
-            "*:Execute".to_string(),
         ]
         .into_iter()
         .collect();

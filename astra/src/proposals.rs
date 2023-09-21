@@ -541,15 +541,11 @@ impl Contract {
 
     /// Act on given proposal by id, if permissions allow.
     /// Memo is logged but not stored in the state. Can be used to leave notes or explain the action.
-<<<<<<< HEAD
     pub fn act_proposal(&mut self, id: u64, action: Action, memo: Option<String>, skip_execution: Option<bool>) {
-        let execute = !skip_execution.unwrap_or(true);
-=======
-    pub fn act_proposal(&mut self, id: u64, action: Action, memo: Option<String>) {
         if self.status == ContractStatus::Dissolved {
             panic!("Cannot perform this action, dao is dissolved!")
         }
->>>>>>> c5fac1d2368e58353dbf6ee3520886889121b9c2
+        let execute = !skip_execution.unwrap_or(true);
         let mut proposal: Proposal = self.proposals.get(&id).expect("ERR_NO_PROPOSAL").into();
         let policy = self.policy.get().unwrap().to_policy();
         // Check permissions for the given action.

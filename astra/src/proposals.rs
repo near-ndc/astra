@@ -602,6 +602,7 @@ impl Contract {
             //  - if the number of votes in the group has changed (new members has been added) -
             //      the proposal can loose it's approved state. In this case new proposal needs to be made, this one can only expire.
             Action::Finalize => {
+                require!(self.assert_cooldown(proposal.submission_time, policy.cooldown), "ERR_PROPOSAL_COOLDOWN_LEFT");
                 proposal.status = policy.proposal_status(
                     &proposal,
                     policy.roles.iter().map(|r| r.name.clone()).collect(),

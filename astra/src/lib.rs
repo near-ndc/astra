@@ -328,22 +328,22 @@ mod tests {
         );
 
         let id = create_proposal(&mut context, &mut contract);
-        contract.act_proposal(id, Action::VoteApprove, None, Some(false));
-        // verify proposal wasn't approved during final vote
-        assert_eq!(
-            contract.get_proposal(id).proposal.status,
-            ProposalStatus::InProgress
-        );
-
-        contract.act_proposal(id, Action::ExecuteProposal, None, None);
+        contract.act_proposal(id, Action::VoteApprove, None, Some(true));
+        // verify proposal wasn't executed during final vote
         assert_eq!(
             contract.get_proposal(id).proposal.status,
             ProposalStatus::Approved
         );
+
+        contract.act_proposal(id, Action::Execute, None, None);
+        assert_eq!(
+            contract.get_proposal(id).proposal.status,
+            ProposalStatus::Executed
+        );
     }
 
     #[test]
-    #[should_panic(expected = "ERR_PROPOSAL_NOT_IN_PROGRESS")]
+    #[should_panic(expected = "ERR_PROPOSAL_ALREADY_EXECUTED")]
     fn test_proposal_double_execution() {
         let mut context = VMContextBuilder::new();
         testing_env!(context.predecessor_account_id(accounts(1)).build());
@@ -353,15 +353,15 @@ mod tests {
         );
 
         let id = create_proposal(&mut context, &mut contract);
-        contract.act_proposal(id, Action::VoteApprove, None, None);
+        contract.act_proposal(id, Action::VoteApprove, None, Some(false));
         // verify proposal was approved and executed
         assert_eq!(
             contract.get_proposal(id).proposal.status,
-            ProposalStatus::Approved
+            ProposalStatus::Executed
         );
 
         // panics if we try to execute again
-        contract.act_proposal(id, Action::ExecuteProposal, None, None);
+        contract.act_proposal(id, Action::Execute, None, None);
     }
 
     #[test]

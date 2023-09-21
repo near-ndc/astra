@@ -31,6 +31,7 @@ pub enum ProposalStatus {
     Moved,
     /// If proposal has failed when finalizing. Allowed to re-finalize again to either expire or approved.
     Failed,
+    Executed,
 }
 
 /// Function call arguments.
@@ -537,8 +538,8 @@ impl Contract {
 
     /// Act on given proposal by id, if permissions allow.
     /// Memo is logged but not stored in the state. Can be used to leave notes or explain the action.
-    pub fn act_proposal(&mut self, id: u64, action: Action, memo: Option<String>, no_execute: Option<bool>) {
-        let execute = no_execute.unwrap_or(true);
+    pub fn act_proposal(&mut self, id: u64, action: Action, memo: Option<String>, skip_execution: Option<bool>) {
+        let execute = !skip_execution.unwrap_or(true);
         let mut proposal: Proposal = self.proposals.get(&id).expect("ERR_NO_PROPOSAL").into();
         let policy = self.policy.get().unwrap().to_policy();
         // Check permissions for the given action.
@@ -566,25 +567,22 @@ impl Contract {
                     self.get_user_weight(&sender_id),
                 );
                 
-                if execute {
-                    // Updates proposal status with new votes using the policy.
-                    proposal.status =
+                // Updates proposal status with new votes using the policy.
+                proposal.status =
                     policy.proposal_status(&proposal, roles, self.total_delegation_amount);
-                    if proposal.status == ProposalStatus::Approved {
-                        self.internal_execute_proposal(&policy, &proposal, id);
-                        true
-                    } else if proposal.status == ProposalStatus::Removed && execute {
-                        self.internal_reject_proposal(&policy, &proposal, false);
-                        self.proposals.remove(&id);
-                        false
-                    } else if proposal.status == ProposalStatus::Rejected && execute {
-                        self.internal_reject_proposal(&policy, &proposal, true);
-                        true
-                    } else {
-                        // Still in progress or expired.
-                        true
-                    }
+                if proposal.status == ProposalStatus::Approved && execute {
+                    self.internal_execute_proposal(&policy, &proposal, id);
+                    proposal.status = ProposalStatus::Executed;
+                    true
+                } else if proposal.status == ProposalStatus::Removed {
+                    self.internal_reject_proposal(&policy, &proposal, false);
+                    self.proposals.remove(&id);
+                    false
+                } else if proposal.status == ProposalStatus::Rejected {
+                    self.internal_reject_proposal(&policy, &proposal, true);
+                    true
                 } else {
+                    // Still in progress or expired.
                     true
                 }
             }
@@ -604,6 +602,7 @@ impl Contract {
                 match proposal.status {
                     ProposalStatus::Approved => {
                         self.internal_execute_proposal(&policy, &proposal, id);
+                        proposal.status = ProposalStatus::Executed;
                     }
                     ProposalStatus::Expired => {
                         self.internal_reject_proposal(&policy, &proposal, true);
@@ -616,26 +615,20 @@ impl Contract {
             }
             Action::MoveToHub => false,
             Action::Execute => {
-                // Note: If proposal was executed already `proposal_status` will throw error
+                if proposal.status == ProposalStatus::Executed {
+                    env::panic_str("ERR_PROPOSAL_ALREADY_EXECUTED");
+                }
                 proposal.status = policy.proposal_status(&proposal, roles, self.total_delegation_amount);
-                let mut update = true;
                 match proposal.status {
                     ProposalStatus::Approved => {
                         self.internal_execute_proposal(&policy, &proposal, id);
-                    }
-                    ProposalStatus::Removed => {
-                        self.internal_reject_proposal(&policy, &proposal, false);
-                        self.proposals.remove(&id);
-                        update = false;
-                    }
-                    ProposalStatus::Rejected => {
-                        self.internal_reject_proposal(&policy, &proposal, true);
+                        proposal.status = ProposalStatus::Executed;
                     }
                     _ => {
                         // do nothing
                     }
                 }
-                update
+                true
             }
         };
         if update {

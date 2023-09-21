@@ -182,7 +182,7 @@ pub fn default_policy(council: Vec<AccountId>) -> Policy {
             RolePermission {
                 name: "all".to_string(),
                 kind: RoleKind::Everyone,
-                permissions: vec!["*:AddProposal".to_string()].into_iter().collect(),
+                permissions: vec!["*:AddProposal".to_string(), "*:Execute".to_string()].into_iter().collect(),
                 vote_policy: HashMap::default(),
             },
             RolePermission {
@@ -195,7 +195,6 @@ pub fn default_policy(council: Vec<AccountId>) -> Policy {
                     "*:VoteReject".to_string(),
                     "*:VoteRemove".to_string(),
                     "*:Finalize".to_string(),
-                    "*:ExecuteProposal".to_string(),
                 ]
                 .into_iter()
                 .collect(),
@@ -386,7 +385,7 @@ impl Policy {
         assert!(
             matches!(
                 proposal.status,
-                ProposalStatus::InProgress | ProposalStatus::Failed
+                ProposalStatus::InProgress | ProposalStatus::Failed | ProposalStatus::Approved
             ),
             "ERR_PROPOSAL_NOT_IN_PROGRESS"
         );
@@ -495,7 +494,7 @@ mod tests {
             "*:VoteReject".to_string(),
             "*:VoteRemove".to_string(),
             "*:Finalize".to_string(),
-            "*:ExecuteProposal".to_string(),
+            "*:Execute".to_string(),
         ]
         .into_iter()
         .collect();

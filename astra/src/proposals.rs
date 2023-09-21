@@ -545,7 +545,7 @@ impl Contract {
         if self.status == ContractStatus::Dissolved {
             panic!("Cannot perform this action, dao is dissolved!")
         }
-        let execute = !skip_execution.unwrap_or(true);
+        let execute = !skip_execution.unwrap_or(false);
         let mut proposal: Proposal = self.proposals.get(&id).expect("ERR_NO_PROPOSAL").into();
         let policy = self.policy.get().unwrap().to_policy();
         // Check permissions for the given action.
@@ -621,9 +621,8 @@ impl Contract {
             }
             Action::MoveToHub => false,
             Action::Execute => {
-                if proposal.status == ProposalStatus::Executed {
-                    env::panic_str("ERR_PROPOSAL_ALREADY_EXECUTED");
-                }
+                require!(proposal.status == ProposalStatus::Executed, "ERR_PROPOSAL_ALREADY_EXECUTED");
+                // recompute status to check if the proposal is not expired.
                 proposal.status = policy.proposal_status(&proposal, roles, self.total_delegation_amount);
                 match proposal.status {
                     ProposalStatus::Approved => {

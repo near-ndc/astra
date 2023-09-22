@@ -521,7 +521,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "ERR_PROPOSAL_COOLDOWN_LEFT")]
+    #[should_panic(expected = "ERR_PROPOSAL_STILL_ACTIVE")]
     fn test_cooldown() {
         let (_, mut contract, id) = setup_for_proposals();
         let mut policy = contract.policy.get().unwrap().to_policy();

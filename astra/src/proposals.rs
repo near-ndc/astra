@@ -602,7 +602,7 @@ impl Contract {
             //  - if the number of votes in the group has changed (new members has been added) -
             //      the proposal can loose it's approved state. In this case new proposal needs to be made, this one can only expire.
             Action::Finalize => {
-                require!(policy.is_past_cooldown(proposal.submission_time), "ERR_PROPOSAL_COOLDOWN_LEFT");
+                require!(policy.is_past_cooldown(proposal.submission_time), "ERR_PROPOSAL_STILL_ACTIVE");
                 proposal.status = policy.proposal_status(
                     &proposal,
                     policy.roles.iter().map(|r| r.name.clone()).collect(),
@@ -625,7 +625,7 @@ impl Contract {
             Action::MoveToHub => false,
             Action::Execute => {
                 require!(proposal.status != ProposalStatus::Executed, "ERR_PROPOSAL_ALREADY_EXECUTED");
-                require!(policy.is_past_cooldown(proposal.submission_time), "ERR_PROPOSAL_COOLDOWN_LEFT");
+                require!(policy.is_past_cooldown(proposal.submission_time), "ERR_PROPOSAL_STILL_ACTIVE");
                 // recompute status to check if the proposal is not expired.
                 proposal.status = policy.proposal_status(&proposal, roles, self.total_delegation_amount);
                 require!(proposal.status == ProposalStatus::Approved, "ERR_PROPOSAL_NOT_APPROVED");

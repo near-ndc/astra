@@ -154,7 +154,7 @@ pub struct Policy {
     pub proposal_bond: U128,
     /// Expiration period for proposals.
     pub proposal_period: U64,
-    /// Proposal can be executed only after cooldown period is complete( in milliseconds )
+    /// The execution of the proposal can only occur once the cooldown period has elapsed (measured in milliseconds).
     pub cooldown: U64,
     /// Bond for claiming a bounty.
     pub bounty_bond: U128,
@@ -277,9 +277,9 @@ impl Policy {
         if parameters.proposal_period.is_some() {
             self.proposal_period = parameters.proposal_period.unwrap();
         }
-        if parameters.cooldown.is_some() {
-            self.cooldown = parameters.cooldown.unwrap();
-        }
+if let Some(cooldown) = parameters.cooldown {
+    self.cooldown = cooldown;
+}
         if parameters.bounty_bond.is_some() {
             self.bounty_bond = parameters.bounty_bond.unwrap();
         }

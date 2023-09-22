@@ -530,6 +530,7 @@ mod tests {
             proposal_period: None, bounty_bond: None,
             bounty_forgiveness_period: None 
         });
+        contract.policy.set(&VersionedPolicy::Current(policy));
 
         contract.act_proposal(id, Action::VoteApprove, None, None);
         // verify proposal wasn't executed during final vote

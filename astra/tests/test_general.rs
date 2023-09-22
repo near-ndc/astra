@@ -106,7 +106,7 @@ async fn test_multi_council() -> anyhow::Result<()> {
             RolePermission {
                 name: "all".to_string(),
                 kind: RoleKind::Everyone,
-                permissions: vec!["*:AddProposal".to_string()].into_iter().collect(),
+                permissions: vec!["*:Execute".to_string(), "*:AddProposal".to_string()].into_iter().collect(),
                 vote_policy: HashMap::default(),
             },
             RolePermission {

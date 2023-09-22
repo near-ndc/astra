@@ -676,7 +676,7 @@ impl Contract {
     /// Returns true if cooldown is over else false
     #[private]
     fn is_past_cooldown(&mut self, submission_time: U64, cooldown: U64) -> bool {
-        if env::block_timestamp_ms() >= cooldown.0 + submission_time.0 {
+        if env::block_timestamp() >= (cooldown.0 * 1_000_000) + submission_time.0 {
             return true;
         }
         false

@@ -526,7 +526,7 @@ mod tests {
         let (_, mut contract, id) = setup_for_proposals();
         let mut policy = contract.policy.get().unwrap().to_policy();
         policy.update_parameters(&PolicyParameters{
-            cooldown: Some(U64::from(1_000_000_000 * 60 * 60)), proposal_bond: None,
+            cooldown: Some(U64::from(1_000 * 60 * 60)), proposal_bond: None,
             proposal_period: None, bounty_bond: None,
             bounty_forgiveness_period: None 
         });

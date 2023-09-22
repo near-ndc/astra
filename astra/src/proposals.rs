@@ -547,9 +547,9 @@ impl Contract {
             panic!("Cannot perform this action, dao is dissolved!")
         }
         let mut proposal: Proposal = self.proposals.get(&id).expect("ERR_NO_PROPOSAL").into();
-        let policy = self.policy.get().unwrap().to_policy();
+        let mut policy = self.policy.get().unwrap().to_policy();
 
-        let execute = !skip_execution.unwrap_or(false) && self.is_past_cooldown(proposal.submission_time, policy.cooldown);
+        let execute = !skip_execution.unwrap_or(false) && policy.is_past_cooldown(proposal.submission_time);
         // Check permissions for the given action.
         let (roles, allowed) =
             policy.can_execute_action(self.internal_user_info(), &proposal.kind, &action);
@@ -602,7 +602,7 @@ impl Contract {
             //  - if the number of votes in the group has changed (new members has been added) -
             //      the proposal can loose it's approved state. In this case new proposal needs to be made, this one can only expire.
             Action::Finalize => {
-                require!(self.is_past_cooldown(proposal.submission_time, policy.cooldown), "ERR_PROPOSAL_COOLDOWN_LEFT");
+                require!(policy.is_past_cooldown(proposal.submission_time), "ERR_PROPOSAL_COOLDOWN_LEFT");
                 proposal.status = policy.proposal_status(
                     &proposal,
                     policy.roles.iter().map(|r| r.name.clone()).collect(),
@@ -625,7 +625,7 @@ impl Contract {
             Action::MoveToHub => false,
             Action::Execute => {
                 require!(proposal.status != ProposalStatus::Executed, "ERR_PROPOSAL_ALREADY_EXECUTED");
-                require!(self.is_past_cooldown(proposal.submission_time, policy.cooldown), "ERR_PROPOSAL_COOLDOWN_LEFT");
+                require!(policy.is_past_cooldown(proposal.submission_time), "ERR_PROPOSAL_COOLDOWN_LEFT");
                 // recompute status to check if the proposal is not expired.
                 proposal.status = policy.proposal_status(&proposal, roles, self.total_delegation_amount);
                 require!(proposal.status == ProposalStatus::Approved, "ERR_PROPOSAL_NOT_APPROVED");
@@ -671,14 +671,5 @@ impl Contract {
         self.proposals
             .insert(&proposal_id, &VersionedProposal::Default(proposal));
         result
-    }
-
-    /// Returns true if cooldown is over else false
-    #[private]
-    fn is_past_cooldown(&mut self, submission_time: U64, cooldown: U64) -> bool {
-        if env::block_timestamp() >= (cooldown.0 * 1_000_000) + submission_time.0 {
-            return true;
-        }
-        false
     }
 }

@@ -271,20 +271,20 @@ impl Policy {
     }
 
     pub fn update_parameters(&mut self, parameters: &PolicyParameters) {
-        if parameters.proposal_bond.is_some() {
-            self.proposal_bond = parameters.proposal_bond.unwrap();
+        if let Some(proposal_bond) = parameters.proposal_bond {
+            self.proposal_bond = proposal_bond;
         }
-        if parameters.proposal_period.is_some() {
-            self.proposal_period = parameters.proposal_period.unwrap();
+        if let Some(proposal_period) = parameters.proposal_period {
+            self.proposal_period = proposal_period;
         }
-if let Some(cooldown) = parameters.cooldown {
-    self.cooldown = cooldown;
-}
-        if parameters.bounty_bond.is_some() {
-            self.bounty_bond = parameters.bounty_bond.unwrap();
+        if let Some(cooldown) = parameters.cooldown {
+            self.cooldown = cooldown;
         }
-        if parameters.bounty_forgiveness_period.is_some() {
-            self.bounty_forgiveness_period = parameters.bounty_forgiveness_period.unwrap();
+        if let Some(bounty_bond) = parameters.bounty_bond {
+            self.bounty_bond = bounty_bond;
+        }
+        if let Some(bounty_forgiveness_period) = parameters.bounty_forgiveness_period {
+            self.bounty_forgiveness_period = bounty_forgiveness_period;
         }
         env::log_str("Successfully updated the policy parameters.");
     }
@@ -449,6 +449,14 @@ if let Some(cooldown) = parameters.cooldown {
             }
         }
         proposal.status.clone()
+    }
+
+    /// Returns true if cooldown is over else false
+    pub fn is_past_cooldown(&mut self, submission_time: U64) -> bool {
+        if env::block_timestamp() >= (self.cooldown.0 * 1_000_000) + submission_time.0 {
+            return true;
+        }
+        false
     }
 }
 

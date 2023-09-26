@@ -310,6 +310,7 @@ ProposalKind::ChangePolicyUpdateParameters { .. },
   - `proposal`
     - `description`
     - `kind`
+    - `category` [optional]
 - proposer account ID
 - attached deposit (minimum 1 Ⓝ)
 
@@ -324,7 +325,8 @@ ProposalKind::ChangePolicyUpdateParameters { .. },
     "kind": {
       "AddMemberToRole": {
         "member_id": "council_member_3.testnet",
-        "role": "council"
+        "role": "council",
+        "category": "legal"
       }
     }
   }
@@ -340,7 +342,7 @@ ProposalKind::ChangePolicyUpdateParameters { .. },
 
 ```bash
 near call genesis.astra.testnet add_proposal \
-'{"proposal": {"description": "Add New Council", "kind": {"AddMemberToRole": {"member_id": "council_member_3.testnet", "role": "council"}}}}' \
+'{"proposal": {"description": "Add New Council", "kind": {"AddMemberToRole": {"member_id": "council_member_3.testnet", "role": "council", "category": "marketing"}}}}' \
 --accountId proposer.testnet \
 --amount 1
 ```

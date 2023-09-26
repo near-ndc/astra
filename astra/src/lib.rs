@@ -635,6 +635,7 @@ mod tests {
     fn test_dissolve_missing_proposals() {
         let (mut context, mut contract, id)= setup_ctr();
         assert_eq!(contract.get_proposal(id).id, id);
+        assert!(contract.get_proposal(id).proposal.category.is_none());
 
         let mut res = contract.policy.get().unwrap().to_policy();
         assert!(!res.roles.is_empty());
@@ -650,5 +651,21 @@ mod tests {
 
         // remove all proposals, should not throw error because of missing prop
         contract.finalize_dissolve(0, 5);
+    }
+
+    #[test]
+    fn test_category() {
+        let (_, mut contract, id)= setup_ctr();
+        let id = contract.add_proposal(ProposalInput {
+            description: "test".to_string(),
+            kind: ProposalKind::AddMemberToRole {
+                member_id: accounts(2),
+                role: "Council".to_string(),
+            },
+            category: Some("legal".to_string())
+        });
+        
+        assert!(contract.get_proposal(id).proposal.category.is_some());
+        assert_eq!(contract.get_proposal(id).proposal.category.unwrap(), "legal".to_string());
     }
 }

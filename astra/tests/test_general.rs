@@ -134,6 +134,7 @@ async fn test_multi_council() -> anyhow::Result<()> {
         kind: ProposalKind::ChangePolicy {
             policy: VersionedPolicy::Current(new_policy.clone()),
         },
+        category: None
     };
     let res2 = root.call(dao_contract.id(), "add_proposal")
         .args_json(json!({"proposal": proposal}))
@@ -325,7 +326,8 @@ async fn proposal_tests() -> anyhow::Result<()> {
     let config = Config { name: "astra".to_string(), purpose: "testing".to_string(), metadata: Base64VecU8("".to_string().into()) };
     let proposal = ProposalInput {
         description: "rename the dao".to_string(),
-        kind: ProposalKind::ChangeConfig { config }
+        kind: ProposalKind::ChangeConfig { config },
+        category: None
     };
     let res = root
         .call(dao.id(), "add_proposal")
@@ -418,6 +420,7 @@ async fn test_create_dao_and_use_token() -> anyhow::Result<()> {
         kind: ProposalKind::SetStakingContract {
             staking_id: staking.id().parse().unwrap(),
         },
+        category: None
     };
     let res = user2
         .call(dao.id(), "add_proposal")
@@ -571,6 +574,7 @@ async fn test_failurestest_create_dao_and_use_token() -> anyhow::Result<()> {
             amount: U128(1_000_000),
             msg: Some("some".to_string()),
         },
+        category: None
     };
     let res = root
         .call(dao.id(), "add_proposal")

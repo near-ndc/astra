@@ -69,6 +69,7 @@ pub async fn add_member_proposal(
             member_id,
             role: "council".to_string(),
         },
+        category: None
     };
     let res = root
         .call(dao.id(), "add_proposal")
@@ -98,6 +99,7 @@ pub async fn add_transfer_proposal(
             amount: U128(amount),
             msg,
         },
+        category: None
     };
     let res = root
         .call(dao.id(), "add_proposal")
@@ -123,6 +125,7 @@ pub async fn add_bounty_proposal(root: Account, dao: &Contract) -> anyhow::Resul
                 max_deadline: U64(env::block_timestamp() + 10_000_000_000),
             },
         },
+        category: None
     };
     let res = root
         .call(dao.id(), "add_proposal")

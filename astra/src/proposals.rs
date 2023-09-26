@@ -182,6 +182,8 @@ pub struct Proposal {
     pub votes: HashMap<AccountId, Vote>,
     /// Submission time (for voting period).
     pub submission_time: U64,
+    /// Category of this proposal
+    pub category: Option<String>
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
@@ -233,6 +235,8 @@ pub struct ProposalInput {
     pub description: String,
     /// Kind of proposal with relevant information.
     pub kind: ProposalKind,
+    /// Category of proposal
+    pub category: Option<String>
 }
 
 impl From<ProposalInput> for Proposal {
@@ -245,6 +249,7 @@ impl From<ProposalInput> for Proposal {
             vote_counts: HashMap::default(),
             votes: HashMap::default(),
             submission_time: U64::from(env::block_timestamp()),
+            category: input.category
         }
     }
 }

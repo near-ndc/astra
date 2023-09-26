@@ -175,6 +175,7 @@ impl Contract {
                     bounty_id: id,
                     receiver_id: sender_id.clone(),
                 },
+                category: None
             });
             claims[claim_idx].completed = true;
             self.bounty_claimers.insert(&sender_id, &claims);
@@ -227,6 +228,7 @@ mod tests {
                     max_deadline: U64::from(1_000),
                 },
             },
+            category: None
         });
         assert_eq!(contract.get_last_bounty_id(), id);
         contract.act_proposal(id, Action::VoteApprove, None, Some(false));

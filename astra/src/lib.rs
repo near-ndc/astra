@@ -280,6 +280,7 @@ mod tests {
                 amount: U128(parse_near!("100 N")),
                 msg: None,
             },
+            category: None
         })
     }
 
@@ -399,6 +400,7 @@ mod tests {
                 member_id: accounts(2),
                 role: "council".to_string(),
             },
+            category: None
         });
     }
 
@@ -479,6 +481,7 @@ mod tests {
                 member_id: accounts(2),
                 role: "missing".to_string(),
             },
+            category: None
         });
         contract.act_proposal(id, Action::VoteApprove, None, None);
         let x = contract.get_policy();
@@ -535,6 +538,7 @@ mod tests {
             kind: ProposalKind::ChangePolicy {
                 policy: VersionedPolicy::Default(vec![]),
             },
+            category: None
         });
     }
 
@@ -593,6 +597,7 @@ mod tests {
                 member_id: accounts(2),
                 role: "Council".to_string(),
             },
+            category: None
         });
     }
 

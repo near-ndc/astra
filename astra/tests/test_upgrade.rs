@@ -60,7 +60,8 @@ async fn test_upgrade_using_factory() -> anyhow::Result<()> {
 
     let proposal = ProposalInput {
         description: "proposal to test".to_string(),
-        kind: ProposalKind::UpgradeSelf { hash }
+        kind: ProposalKind::UpgradeSelf { hash },
+        category: None
     };
     let res = root
         .call(&dao, "add_proposal")
@@ -113,6 +114,7 @@ async fn test_upgrade_other() -> anyhow::Result<()> {
             method_name: "upgrade".to_string(),
             hash,
         },
+        category: None
     };
     let res = root
         .call(dao.id(), "add_proposal")

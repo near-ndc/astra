@@ -265,7 +265,7 @@ mod tests {
     use near_sdk::{testing_env, VMContext};
     use near_units::parse_near;
 
-    use crate::proposals::ProposalStatus;
+    use crate::proposals::{ProposalStatus, PolicyParameters};
     use crate::test_utils::*;
 
     use super::*;
@@ -323,6 +323,7 @@ mod tests {
             default_vote_policy: VotePolicy::default(),
             proposal_bond: U128(10u128.pow(24)),
             proposal_period: U64::from(1_000_000_000 * 60 * 60 * 24 * 7),
+            cooldown: U64::from(0),
             bounty_bond: U128(10u128.pow(24)),
             bounty_forgiveness_period: U64::from(1_000_000_000 * 60 * 60 * 24),
         }
@@ -355,7 +356,7 @@ mod tests {
             ndc_trust()
         );
         let id = create_proposal(&mut context, &mut contract);
-        return (context.build(), contract, id)
+        (context.build(), contract, id)
     }
 
     #[test]
@@ -523,6 +524,28 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "ERR_PROPOSAL_STILL_ACTIVE")]
+    fn test_cooldown() {
+        let (_, mut contract, id) = setup_for_proposals();
+        let mut policy = contract.policy.get().unwrap().to_policy();
+        policy.update_parameters(&PolicyParameters{
+            cooldown: Some(U64::from(1_000 * 60 * 60)), proposal_bond: None,
+            proposal_period: None, bounty_bond: None,
+            bounty_forgiveness_period: None 
+        });
+        contract.policy.set(&VersionedPolicy::Current(policy));
+
+        contract.act_proposal(id, Action::VoteApprove, None, None);
+        // verify proposal wasn't executed during final vote
+        assert_eq!(
+            contract.get_proposal(id).proposal.status,
+            ProposalStatus::Approved
+        );
+
+        contract.act_proposal(id, Action::Execute, None, None);
+    }
+
+    #[test]
     #[should_panic(expected = "ERR_INVALID_POLICY")]
     fn test_fails_adding_invalid_policy() {
         let mut context = VMContextBuilder::new();
@@ -641,7 +664,7 @@ mod tests {
         assert!(!res.roles.is_empty());
 
         context.predecessor_account_id = acc_voting_body();
-        testing_env!(context.clone());
+        testing_env!(context);
         contract.dissolve_hook();
         res = contract.policy.get().unwrap().to_policy();
         assert!(res.roles.is_empty());

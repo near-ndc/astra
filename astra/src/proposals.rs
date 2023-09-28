@@ -52,6 +52,7 @@ pub struct ActionCall {
 pub struct PolicyParameters {
     pub proposal_bond: Option<U128>,
     pub proposal_period: Option<U64>,
+    pub cooldown: Option<U64>,
     pub bounty_bond: Option<U128>,
     pub bounty_forgiveness_period: Option<U64>,
 }
@@ -550,9 +551,10 @@ impl Contract {
         if self.status == ContractStatus::Dissolved {
             panic!("Cannot perform this action, dao is dissolved!")
         }
-        let execute = !skip_execution.unwrap_or(false);
         let mut proposal: Proposal = self.proposals.get(&id).expect("ERR_NO_PROPOSAL").into();
-        let policy = self.policy.get().unwrap().to_policy();
+        let mut policy = self.policy.get().unwrap().to_policy();
+
+        let execute = !skip_execution.unwrap_or(false) && policy.is_past_cooldown(proposal.submission_time);
         // Check permissions for the given action.
         let (roles, allowed) =
             policy.can_execute_action(self.internal_user_info(), &proposal.kind, &action);
@@ -605,6 +607,7 @@ impl Contract {
             //  - if the number of votes in the group has changed (new members has been added) -
             //      the proposal can loose it's approved state. In this case new proposal needs to be made, this one can only expire.
             Action::Finalize => {
+                require!(policy.is_past_cooldown(proposal.submission_time), "ERR_PROPOSAL_STILL_ACTIVE");
                 proposal.status = policy.proposal_status(
                     &proposal,
                     policy.roles.iter().map(|r| r.name.clone()).collect(),
@@ -627,6 +630,7 @@ impl Contract {
             Action::MoveToHub => false,
             Action::Execute => {
                 require!(proposal.status != ProposalStatus::Executed, "ERR_PROPOSAL_ALREADY_EXECUTED");
+                require!(policy.is_past_cooldown(proposal.submission_time), "ERR_PROPOSAL_STILL_ACTIVE");
                 // recompute status to check if the proposal is not expired.
                 proposal.status = policy.proposal_status(&proposal, roles, self.total_delegation_amount);
                 require!(proposal.status == ProposalStatus::Approved, "ERR_PROPOSAL_NOT_APPROVED");

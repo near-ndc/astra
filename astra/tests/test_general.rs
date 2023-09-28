@@ -106,7 +106,7 @@ async fn test_multi_council() -> anyhow::Result<()> {
             RolePermission {
                 name: "all".to_string(),
                 kind: RoleKind::Everyone,
-                permissions: vec!["*:AddProposal".to_string()].into_iter().collect(),
+                permissions: vec!["*:Execute".to_string(), "*:AddProposal".to_string()].into_iter().collect(),
                 vote_policy: HashMap::default(),
             },
             RolePermission {
@@ -125,6 +125,7 @@ async fn test_multi_council() -> anyhow::Result<()> {
         default_vote_policy: VotePolicy::default(),
         proposal_bond: U128(10u128.pow(24)),
         proposal_period: U64::from(1_000_000_000 * 60 * 60 * 24 * 7),
+        cooldown: U64::from(0),
         bounty_bond: U128(10u128.pow(24)),
         bounty_forgiveness_period: U64::from(1_000_000_000 * 60 * 60 * 24),
     };

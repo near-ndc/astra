@@ -154,6 +154,8 @@ pub struct Policy {
     pub proposal_bond: U128,
     /// Expiration period for proposals.
     pub proposal_period: U64,
+    /// The execution of the proposal can only occur once the cooldown period has elapsed (measured in milliseconds).
+    pub cooldown: U64,
     /// Bond for claiming a bounty.
     pub bounty_bond: U128,
     /// Period in which giving up on bounty is not punished.
@@ -204,6 +206,7 @@ pub fn default_policy(council: Vec<AccountId>) -> Policy {
         default_vote_policy: VotePolicy::default(),
         proposal_bond: U128(10u128.pow(24)),
         proposal_period: U64::from(1_000_000_000 * 60 * 60 * 24 * 7),
+        cooldown: U64::from(0),
         bounty_bond: U128(10u128.pow(24)),
         bounty_forgiveness_period: U64::from(1_000_000_000 * 60 * 60 * 24),
     }
@@ -268,17 +271,20 @@ impl Policy {
     }
 
     pub fn update_parameters(&mut self, parameters: &PolicyParameters) {
-        if parameters.proposal_bond.is_some() {
-            self.proposal_bond = parameters.proposal_bond.unwrap();
+        if let Some(proposal_bond) = parameters.proposal_bond {
+            self.proposal_bond = proposal_bond;
         }
-        if parameters.proposal_period.is_some() {
-            self.proposal_period = parameters.proposal_period.unwrap();
+        if let Some(proposal_period) = parameters.proposal_period {
+            self.proposal_period = proposal_period;
         }
-        if parameters.bounty_bond.is_some() {
-            self.bounty_bond = parameters.bounty_bond.unwrap();
+        if let Some(cooldown) = parameters.cooldown {
+            self.cooldown = cooldown;
         }
-        if parameters.bounty_forgiveness_period.is_some() {
-            self.bounty_forgiveness_period = parameters.bounty_forgiveness_period.unwrap();
+        if let Some(bounty_bond) = parameters.bounty_bond {
+            self.bounty_bond = bounty_bond;
+        }
+        if let Some(bounty_forgiveness_period) = parameters.bounty_forgiveness_period {
+            self.bounty_forgiveness_period = bounty_forgiveness_period;
         }
         env::log_str("Successfully updated the policy parameters.");
     }
@@ -443,6 +449,14 @@ impl Policy {
             }
         }
         proposal.status.clone()
+    }
+
+    /// Returns true if cooldown is over else false
+    pub fn is_past_cooldown(&mut self, submission_time: U64) -> bool {
+        if env::block_timestamp() >= (self.cooldown.0 * 1_000_000) + submission_time.0 {
+            return true;
+        }
+        false
     }
 }
 
@@ -616,6 +630,7 @@ mod tests {
             proposal_bond: Some(U128(10u128.pow(26))),
             proposal_period: None,
             bounty_bond: None,
+            cooldown: None,
             bounty_forgiveness_period: Some(U64::from(1_000_000_000 * 60 * 60 * 24 * 5)),
         };
         policy.update_parameters(&new_parameters);
